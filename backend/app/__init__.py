@@ -1,0 +1,1 @@
+"""SWEAAS backend application package."""
