@@ -9,9 +9,16 @@ from app.schemas.agent_schema import (
 )
 from app.services.seed_data import AGENTS
 
+# Stable ID for the product-facing support agent (chat with end users).
+CUSTOMER_SUPPORT_AGENT_ID = "sup-cs-01"
+
 
 class AgentService:
     """Provides agent directory, activity data, and chat relay.
+
+    **Product-user chat:** use ``POST /api/v1/agents/sup-cs-01/chat`` (Customer Support)
+    from your product UI so end-user conversations stay separate from internal
+    engineering agents. **Customer video calls:** ``POST /api/v1/communication/customer-call``.
 
     In production, agent queries will hit the database; chat messages
     will be relayed to the LangGraph orchestration service.

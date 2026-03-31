@@ -18,6 +18,7 @@ class OnboardingService:
             DepartmentOption(key="engineering", label="Engineering", suggested_agents=3),
             DepartmentOption(key="marketing", label="Marketing", suggested_agents=2),
             DepartmentOption(key="product", label="Product", suggested_agents=2),
+            DepartmentOption(key="support", label="Customer success & support", suggested_agents=2),
         ]
 
     def assess(self, request: OnboardingAssessmentRequest) -> OnboardingAssessmentResponse:

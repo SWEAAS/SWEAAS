@@ -6,7 +6,7 @@ def test_list_departments(client):
     assert resp.status_code == 200
     departments = resp.json()
     assert isinstance(departments, list)
-    assert len(departments) == 3
+    assert len(departments) == 4
     keys = [d["key"] for d in departments]
     assert "engineering" in keys
 

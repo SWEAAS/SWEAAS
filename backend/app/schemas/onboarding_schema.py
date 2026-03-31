@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class DepartmentOption(BaseModel):
-    key: Literal["engineering", "marketing", "product"]
+    key: Literal["engineering", "marketing", "product", "support"]
     label: str
     suggested_agents: int = Field(ge=0)
 

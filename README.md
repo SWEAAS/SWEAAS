@@ -3,6 +3,37 @@
 A platform that gives anyone access to a ready-to-go AI-powered software engineering team.
 Solo founders and small teams get a full engineering department — CTO, managers, and specialist agents — that autonomously plans, builds, tests, and ships code within a user-defined budget.
 
+### Documentation map (read these with every AI prompt)
+
+| Doc | Use |
+|-----|-----|
+| **This file** | Architecture, APIs, integrations, quick start |
+| [`docs/PROMPTS_AND_AI.md`](docs/PROMPTS_AND_AI.md) | Cursor / LLM prompt templates, file pointers, conventions |
+| [`docs/README.md`](docs/README.md) | Index of all docs |
+| [`backend/README.md`](backend/README.md) | Python layout, tests, Alembic, customer-facing API table |
+| [`backend/app/README.md`](backend/app/README.md) | `app/` package layers and rules |
+| [`backend/tests/README.md`](backend/tests/README.md) | Pytest how-to |
+| [`frontend/README.md`](frontend/README.md) | Vite app structure, theme, API proxy |
+
+Product vision (not auto-loaded by code): [`prompt.md`](prompt.md), [`plan.md`](plan.md).
+
+---
+
+## Customer experience: chat, calls, and feedback
+
+**Product users** (your customers) are **not** the same as platform owners. Use dedicated APIs so support traffic stays isolated from internal engineering agents.
+
+| Capability | How |
+|------------|-----|
+| **Chat with product users** | `POST /api/v1/agents/sup-cs-01/chat` — **Customer Support** agent (`sup-cs-01`). Same chat machinery as other agents; wire your in-app widget to this ID. |
+| **Customer video / voice-style call** | `POST /api/v1/communication/customer-call` — Tavus CVI for end users. Set `TAVUS_CUSTOMER_REPLICA_ID` and `TAVUS_CUSTOMER_PERSONA_ID` (optional; falls back to CTO replica in dev). |
+| **Owner / CTO strategy call** | `POST /api/v1/communication/cto-call` — internal Tavus persona. |
+| **User feedback (triage → agents)** | `POST /api/v1/feedback` (authenticated), `GET /api/v1/feedback?project_id=…`. Optional fan-out: `FEEDBACK_WEBHOOK_URL` (Slack, Zapier, worker). |
+| **External tools** | `POST /api/v1/feedback/webhooks/intercom` and `.../webhooks/canny` normalize tickets into the same feedback store for agents to consume. |
+
+**Support department in the agent roster:** `Customer Success Manager` (`sup-mgr-01`) and **Customer Support** (`sup-cs-01`) in [`backend/app/services/seed_data.py`](backend/app/services/seed_data.py).  
+**Optional future:** Twilio voice/SMS (`TWILIO_*` in `.env.example`) for human escalation — hooks reserved in config.
+
 ---
 
 ## Architecture
@@ -114,11 +145,13 @@ SWEAAS/
 │       ├── components/          # UI components
 │       ├── views/               # Page views
 │       └── three/               # 3D HQ (React Three Fiber)
-├── vendor/                      # Cloned dependencies
+├── docs/                        # Prompt templates + doc index
+├── vendor/                      # Cloned dependencies (gitignored — clone locally)
 │   ├── agency-agents/           # Agent role definitions
 │   └── nemoclaw/                # NVIDIA NemoClaw blueprints
 ├── docker-compose.yml           # PostgreSQL, Redis, ChromaDB
 ├── pyproject.toml               # Python dependencies
+├── prompt.md / plan.md          # Product vision (reference)
 └── .env.example                 # All required env vars
 ```
 
@@ -137,8 +170,13 @@ SWEAAS/
 | `/api/v1/budget/estimate`      | POST   | Budget estimation                    |
 | `/api/v1/budget/checkout`      | POST   | Stripe Checkout session              |
 | `/api/v1/onboarding/assess`    | POST   | Onboarding assessment                |
-| `/api/v1/communication/cto-call` | POST | Start Tavus CTO video call           |
+| `/api/v1/communication/customer-call` | POST | Tavus call for **end users** (support) |
+| `/api/v1/communication/cto-call` | POST | Start Tavus CTO video call (owner)   |
 | `/api/v1/communication/email`  | POST   | Send email via AgentMail             |
+| `/api/v1/feedback`             | POST   | Submit user feedback (→ agents/webhook) |
+| `/api/v1/feedback`             | GET    | List feedback (optional `project_id`) |
+| `/api/v1/feedback/webhooks/intercom` | POST | Ingest Intercom-style payloads |
+| `/api/v1/feedback/webhooks/canny` | POST | Ingest Canny-style payloads      |
 | `/api/v1/observability/overview` | GET  | Dashboard metrics                    |
 | `/api/v1/observability/sentry/issues` | GET | Unresolved Sentry issues       |
 
@@ -155,8 +193,11 @@ SWEAAS/
 | **Sentry**     | Error tracking + auto-fix discovery  | `SENTRY_DSN`             |
 | **Stripe**     | Subscription billing                 | `STRIPE_SECRET_KEY`      |
 | **AgentMail**  | Email for AI agents                  | `AGENTMAIL_API_KEY`      |
-| **Tavus**      | CTO video calls                      | `TAVUS_API_KEY`          |
+| **Tavus**      | CTO + customer video (CVI)           | `TAVUS_API_KEY`, `TAVUS_CUSTOMER_*` |
 | **Golpo**      | AI explainer videos                  | `GOLPO_API_KEY`          |
+| **Feedback webhook** | Fan-out feedback to Slack/Zapier | `FEEDBACK_WEBHOOK_URL`   |
+| **Twilio** (optional) | Voice/SMS escalation          | `TWILIO_*`               |
+| **Intercom / Canny** | Ingest via `/feedback/webhooks/*` | HTTPS + secret headers (extend as needed) |
 
 ## Adding New Integrations
 

@@ -11,6 +11,8 @@ from app.schemas.communication_schema import (
     CTOCallResponse,
     CalendarInviteRequest,
     CalendarInviteResponse,
+    CustomerCallRequest,
+    CustomerCallResponse,
     EmailMessageRequest,
     EmailMessageResponse,
     ExplainerVideoRequest,
@@ -104,6 +106,54 @@ class CommunicationService:
                 conversation_url=data["conversation_url"],
                 conversation_id=data["conversation_id"],
                 status="created",
+            )
+
+    # ── Customer video call (product users) via Tavus ────────────
+
+    async def create_customer_support_call(
+        self, request: CustomerCallRequest
+    ) -> CustomerCallResponse:
+        """Start a Tavus conversation for end-user / customer support calls.
+
+        Uses TAVUS_CUSTOMER_REPLICA_ID / TAVUS_CUSTOMER_PERSONA_ID when set;
+        otherwise falls back to the CTO replica/persona for dev.
+        """
+        replica = settings.tavus_customer_replica_id or settings.tavus_replica_id
+        persona = settings.tavus_customer_persona_id or settings.tavus_persona_id
+
+        if not settings.tavus_api_key:
+            conv_id = f"conv-cust-{uuid4().hex[:10]}"
+            return CustomerCallResponse(
+                conversation_url=f"https://meet.sweaas.dev/customer/{conv_id}",
+                conversation_id=conv_id,
+                status="created (dev mode)",
+                agent_hint="sup-cs-01",
+            )
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://tavusapi.com/v2/conversations",
+                headers={
+                    "x-api-key": settings.tavus_api_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "replica_id": replica,
+                    "persona_id": persona,
+                    "conversation_name": f"Customer support — {request.topic[:60]}",
+                    "custom_greeting": (
+                        f"Hi! I'm here to help with your product. "
+                        f"You mentioned: {request.topic}"
+                    ),
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return CustomerCallResponse(
+                conversation_url=data["conversation_url"],
+                conversation_id=data["conversation_id"],
+                status="created",
+                agent_hint="sup-cs-01",
             )
 
     # ── Golpo Explainer Videos ───────────────────────────────────

@@ -40,6 +40,21 @@ class CTOCallResponse(BaseModel):
     status: str
 
 
+class CustomerCallRequest(BaseModel):
+    """Start a video call between an end user and the customer-support AI persona."""
+
+    project_id: str = ""
+    topic: str = Field(min_length=2, max_length=500)
+    user_email: str | None = Field(default=None, max_length=320)
+
+
+class CustomerCallResponse(BaseModel):
+    conversation_url: str
+    conversation_id: str
+    status: str
+    agent_hint: str = "sup-cs-01"
+
+
 class ExplainerVideoRequest(BaseModel):
     project_id: str
     topic: str = Field(min_length=2, max_length=500)

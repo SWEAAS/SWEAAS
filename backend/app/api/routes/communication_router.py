@@ -11,6 +11,8 @@ from app.schemas.communication_schema import (
     CTOCallResponse,
     CalendarInviteRequest,
     CalendarInviteResponse,
+    CustomerCallRequest,
+    CustomerCallResponse,
     EmailMessageRequest,
     EmailMessageResponse,
     ExplainerVideoRequest,
@@ -39,6 +41,20 @@ async def schedule_invite(
 ) -> CalendarInviteResponse:
     """Schedule a calendar invite for a meeting."""
     return await comm_service.schedule_invite(request)
+
+
+@router.post("/customer-call", response_model=CustomerCallResponse)
+async def create_customer_call(
+    request: CustomerCallRequest,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    comm_service: Annotated[CommunicationService, Depends(get_communication_service)],
+) -> CustomerCallResponse:
+    """Start a Tavus video session for **end users / customers** (support), not internal CTO.
+
+    Uses customer replica/persona when `TAVUS_CUSTOMER_*` env vars are set. Chat-style
+    support for product users uses `POST /agents/sup-cs-01/chat` with the Customer Support agent.
+    """
+    return await comm_service.create_customer_support_call(request)
 
 
 @router.post("/cto-call", response_model=CTOCallResponse)

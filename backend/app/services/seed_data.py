@@ -196,6 +196,48 @@ AGENTS = [
         "parent_agent_id": "prd-mgr-01",
         "recent_activity": [],
     },
+    {
+        "agent_id": "sup-mgr-01",
+        "name": "Customer Success Manager",
+        "role": "support_manager",
+        "department": "support",
+        "hierarchy_level": "manager",
+        "status": "active",
+        "daily_token_budget": 90_000,
+        "tokens_used_today": 22_000,
+        "description": "Orchestrates customer-facing agents: triages feedback, escalates to product/engineering.",
+        "current_focus": "Routing user feedback tickets and monitoring satisfaction signals.",
+        "strike_count": 0,
+        "parent_agent_id": "cto-01",
+        "recent_activity": [],
+    },
+    {
+        "agent_id": "sup-cs-01",
+        "name": "Customer Support",
+        "role": "customer_support",
+        "department": "support",
+        "hierarchy_level": "specialist",
+        "status": "active",
+        "daily_token_budget": 100_000,
+        "tokens_used_today": 35_000,
+        "description": (
+            "Primary AI agent for **product-user chat**: answers how-to questions, "
+            "collects issues, and summarizes feedback for the engineering team."
+        ),
+        "current_focus": "Handling in-app chat and preparing feedback batches for triage.",
+        "strike_count": 0,
+        "parent_agent_id": "sup-mgr-01",
+        "recent_activity": [
+            {
+                "agent_id": "sup-cs-01",
+                "activity_id": "act-s001",
+                "title": "User feedback triage",
+                "detail": "Categorized 12 inbound messages from the feedback API.",
+                "state": "completed",
+                "started_at": "2026-03-31T08:00:00Z",
+            },
+        ],
+    },
 ]
 
 REPORTS = [

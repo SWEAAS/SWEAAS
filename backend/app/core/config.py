@@ -58,10 +58,20 @@ class Settings(BaseSettings):
     # AgentMail
     agentmail_api_key: str = ""
 
-    # Tavus
+    # Tavus (CTO + customer-facing video; customer IDs optional — fallback to CTO)
     tavus_api_key: str = ""
     tavus_replica_id: str = ""
     tavus_persona_id: str = ""
+    tavus_customer_replica_id: str = ""
+    tavus_customer_persona_id: str = ""
+
+    # User feedback fan-out (Slack, Zapier, or internal worker)
+    feedback_webhook_url: str = ""
+
+    # Optional: voice/SMS for human escalation (future Twilio integration)
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
 
     # Golpo
     golpo_api_key: str = ""

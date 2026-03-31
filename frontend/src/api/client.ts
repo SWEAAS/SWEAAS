@@ -78,9 +78,27 @@ export const observabilityApi = {
 export const communicationApi = {
   ctoCall: (data: { project_id: string; topic: string }) =>
     api.post("/communication/cto-call", data),
+  customerCall: (data: {
+    project_id?: string;
+    topic: string;
+    user_email?: string;
+  }) => api.post("/communication/customer-call", data),
   explainerVideo: (data: {
     project_id: string;
     topic: string;
     video_type?: string;
   }) => api.post("/communication/explainer-video", data),
+};
+
+export const feedbackApi = {
+  submit: (data: {
+    project_id?: string;
+    title: string;
+    body: string;
+    category?: string;
+    source?: string;
+    priority?: string;
+  }) => api.post("/feedback", data),
+  list: (projectId?: string) =>
+    api.get("/feedback", { params: projectId ? { project_id: projectId } : {} }),
 };

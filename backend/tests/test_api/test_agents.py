@@ -33,3 +33,11 @@ def test_agent_activity(client):
     assert resp.status_code == 200
     activities = resp.json()
     assert isinstance(activities, list)
+
+
+def test_customer_support_agent(client):
+    resp = client.get("/api/v1/agents/sup-cs-01")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["department"] == "support"
+    assert data["role"] == "customer_support"

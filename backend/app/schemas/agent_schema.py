@@ -9,7 +9,7 @@ class AgentSummary(BaseModel):
     agent_id: str
     name: str
     role: str
-    department: Literal["engineering", "marketing", "product"]
+    department: Literal["engineering", "marketing", "product", "support"]
     hierarchy_level: str
     status: Literal["active", "warning", "paused", "strike"]
     daily_token_budget: int

@@ -1,73 +1,72 @@
-# React + TypeScript + Vite
+# SWEAAS frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Stack:** React 19 · TypeScript · Vite · Tailwind CSS v4 · React Three Fiber (Three.js) · Zustand · React Router · Axios
 
-Currently, two official plugins are available:
+This is the **product UI** for SWEAAS: dashboard, onboarding, settings, **3D “Visit The Office”** HQ, and API integration with the FastAPI backend.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Prerequisites
 
-## React Compiler
+- Node.js 18+
+- Backend running at `http://localhost:8000` (or set proxy target in `vite.config.ts`)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Install and run
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **App:** http://localhost:5173  
+- **API proxy:** Vite proxies `/api` → `http://localhost:8000` (see `vite.config.ts`). The Axios client uses `baseURL: "/api/v1"` so browser calls stay same-origin in dev.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Environment
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- No separate `.env` is required for local dev if the proxy is used.  
+- For production, set `VITE_API_BASE_URL` if you add it (not wired by default — extend `src/api/client.ts`).
+
+## Source map (for prompts / new contributors)
+
+| Path | Role |
+|------|------|
+| `src/main.tsx` | Entry, global CSS |
+| `src/App.tsx` | Routes, lazy `HQView` |
+| `src/api/client.ts` | Axios instance + **all API methods** (agents, budget, feedback, communication) |
+| `src/store/` | Zustand stores (`authStore`, `agentStore`, `budgetStore`, `projectStore`) |
+| `src/views/` | Full pages: `DashboardView`, `LoginView`, `OnboardingView`, `SettingsView`, `CTOCallView` |
+| `src/components/layout/` | `AppLayout`, `Sidebar`, `Header` |
+| `src/components/dashboard/` | Agent cards, charts, task list |
+| `src/three/` | 3D HQ: `HQView`, `HQScene`, `Building`, `AgentAvatar`, `controls`, `ui` |
+
+## Customer vs internal UX
+
+- **End users (your customers):** chat should target agent **`sup-cs-01`** via `agentApi.chat('sup-cs-01', message)` — see `api/client.ts`. For video, `communicationApi.customerCall({ topic, user_email })`.  
+- **Owners / operators:** dashboard agents, CTO call (`communicationApi.ctoCall`), 3D HQ agent clicks.  
+- **Feedback:** `feedbackApi.submit({ title, body, category, ... })` → `POST /api/v1/feedback`.
+
+## Theme
+
+Blue / yellow / white — CSS variables in `src/styles/globals.css` (`@theme`).
+
+## Build
+
+```bash
+npm run build
 ```
+
+Output in `dist/`. Large chunk for `HQView` is expected (Three.js); it is lazy-loaded in `App.tsx`.
+
+## Lint
+
+```bash
+npm run lint
+```
+
+## Parent docs
+
+- [Root README](../README.md) — full platform  
+- [docs/PROMPTS_AND_AI.md](../docs/PROMPTS_AND_AI.md) — Cursor / LLM prompt templates  
+
+## Stock Vite template note
+
+The original Vite README boilerplate was replaced by this file. For ESLint “type-aware” rules, see inline comments in `eslint.config.js` and the [Vite React TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts).
