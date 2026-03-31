@@ -1,0 +1,33 @@
+"""Schemas for project endpoints."""
+
+from pydantic import BaseModel, Field
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    github_username: str = Field(default="", max_length=100)
+    monthly_budget_usd: float = Field(gt=0, default=1000.0)
+    timeline_weeks: int = Field(gt=0, le=52, default=4)
+    departments: list[str] = Field(default=["engineering"])
+
+
+class ProjectResponse(BaseModel):
+    id: str
+    name: str
+    slug: str
+    description: str
+    github_repo_url: str | None
+    status: str
+    created_at: str
+
+
+class ProjectConfigResponse(BaseModel):
+    monthly_budget_usd: float
+    timeline_weeks: int
+    departments: list[str]
+    max_agents: int
+
+
+class ProjectListResponse(BaseModel):
+    projects: list[ProjectResponse]

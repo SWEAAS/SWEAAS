@@ -1,3 +1,4 @@
+# Python
 .venv/
 __pycache__/
 .pytest_cache/
@@ -5,5 +6,39 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.DS_Store
+*.egg-info/
+dist/
+build/
+
+# Environment
 *.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vendor (cloned repos)
+vendor/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# Database
+*.db
+*.sqlite3
+
+# Alembic
+backend/alembic/versions/__pycache__/
+
+# Docker
+docker-compose.override.yml

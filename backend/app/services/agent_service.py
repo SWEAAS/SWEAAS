@@ -1,11 +1,21 @@
-"""Domain logic for agent endpoints."""
+"""Domain logic for agent directory, status, and chat relay."""
 
-from app.schemas.agent_schema import AgentActivity, AgentDetail, AgentSummary
+from app.schemas.agent_schema import (
+    AgentActivity,
+    AgentChatRequest,
+    AgentChatResponse,
+    AgentDetail,
+    AgentSummary,
+)
 from app.services.seed_data import AGENTS
 
 
 class AgentService:
-    """Provides agent directory and activity data."""
+    """Provides agent directory, activity data, and chat relay.
+
+    In production, agent queries will hit the database; chat messages
+    will be relayed to the LangGraph orchestration service.
+    """
 
     def list_agents(self) -> list[AgentSummary]:
         return [AgentSummary(**self._to_summary(agent)) for agent in AGENTS]
@@ -22,6 +32,18 @@ class AgentService:
             return []
         return [AgentActivity(**activity) for activity in agent["recent_activity"]]
 
+    async def chat(self, agent_id: str, request: AgentChatRequest) -> AgentChatResponse:
+        """Relay a user message to an agent and return its response.
+
+        This will be wired to the LangGraph orchestration service so that
+        the user's message is injected as context for the agent's next task.
+        """
+        return AgentChatResponse(
+            agent_id=agent_id,
+            response=f"[{agent_id}] Acknowledged: {request.message[:100]}",
+            context_injected=True,
+        )
+
     def _get_agent_record(self, agent_id: str) -> dict | None:
         return next((agent for agent in AGENTS if agent["agent_id"] == agent_id), None)
 
@@ -29,9 +51,10 @@ class AgentService:
         return {
             "agent_id": agent["agent_id"],
             "name": agent["name"],
+            "role": agent.get("role", "specialist"),
             "department": agent["department"],
+            "hierarchy_level": agent.get("hierarchy_level", "specialist"),
             "status": agent["status"],
-            "owner_email": agent["owner_email"],
             "daily_token_budget": agent["daily_token_budget"],
             "tokens_used_today": agent["tokens_used_today"],
         }

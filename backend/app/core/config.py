@@ -1,22 +1,82 @@
-"""Application configuration."""
+"""Application configuration loaded from environment variables."""
 
 from functools import lru_cache
-from os import getenv
 
-from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings
 
 
-class Settings(BaseModel):
-    """Runtime settings for the API."""
+class Settings(BaseSettings):
+    """Runtime settings — populated from env vars or .env file."""
 
-    app_name: str = Field(default=getenv("APP_NAME", "SWEAAS Backend"))
-    app_version: str = Field(default=getenv("APP_VERSION", "0.1.0"))
-    api_prefix: str = Field(default=getenv("API_PREFIX", "/api/v1"))
-    environment: str = Field(default=getenv("ENVIRONMENT", "development"))
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    # Application
+    app_name: str = "SWEAAS Backend"
+    app_version: str = "0.1.0"
+    api_prefix: str = "/api/v1"
+    environment: str = "development"
+
+    # Database
+    database_url: str = "postgresql+asyncpg://sweaas:sweaas@localhost:5432/sweaas"
+    database_pool_size: int = 20
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Supabase Auth
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
+    supabase_jwt_secret: str = ""
+
+    # GitHub App
+    github_app_id: str = ""
+    github_app_private_key_path: str = ""
+    github_org_name: str = "SWEAAS"
+    github_webhook_secret: str = ""
+
+    # LiteLLM
+    litellm_master_key: str = ""
+    litellm_api_base: str = "http://localhost:4000"
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+
+    # E2B
+    e2b_api_key: str = ""
+
+    # Sentry
+    sentry_dsn: str = ""
+    sentry_auth_token: str = ""
+    sentry_org: str = ""
+    sentry_project: str = "sweaas"
+
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+
+    # AgentMail
+    agentmail_api_key: str = ""
+
+    # Tavus
+    tavus_api_key: str = ""
+    tavus_replica_id: str = ""
+    tavus_persona_id: str = ""
+
+    # Golpo
+    golpo_api_key: str = ""
+
+    # ChromaDB
+    chroma_host: str = "localhost"
+    chroma_port: int = 8100
+
+    # LangSmith
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str = ""
+    langchain_project: str = "sweaas"
 
 
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings."""
-
     return Settings()

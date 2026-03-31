@@ -1,19 +1,69 @@
 [project]
 name = "sweaas-backend"
 version = "0.1.0"
-description = "FastAPI backend for SWEAAS."
+description = "FastAPI backend for SWEAAS — SWE as a Service platform."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
+  # Web framework
   "fastapi>=0.115.0,<1.0.0",
-  "email-validator>=2.2.0,<3.0.0",
   "uvicorn[standard]>=0.32.0,<1.0.0",
+  "email-validator>=2.2.0,<3.0.0",
+
+  # Database
+  "sqlalchemy[asyncio]>=2.0.0,<3.0.0",
+  "asyncpg>=0.30.0",
+  "alembic>=1.14.0,<2.0.0",
+  "pgvector>=0.3.0",
+
+  # Redis
+  "redis>=5.0.0,<6.0.0",
+
+  # Auth
+  "PyJWT>=2.9.0,<3.0.0",
+  "cryptography>=43.0.0",
+
+  # Agent orchestration
+  "langgraph>=0.2.0",
+  "langchain>=0.3.0",
+  "langchain-openai>=0.2.0",
+  "langchain-anthropic>=0.2.0",
+  "langsmith>=0.1.0",
+
+  # LLM routing and budget
+  "litellm>=1.50.0",
+
+  # Sandboxed execution
+  "e2b>=1.0.0",
+  "e2b-code-interpreter>=1.0.0",
+
+  # Vector store / RAG
+  "chromadb>=0.5.0",
+
+  # GitHub integration
+  "PyGithub>=2.4.0",
+
+  # Error tracking
+  "sentry-sdk[fastapi]>=2.0.0",
+
+  # Payments
+  "stripe>=10.0.0",
+
+  # Email (AI agents)
+  "agentmail>=0.1.0",
+
+  # Video conferencing
+  "httpx>=0.28.0,<1.0.0",
+
+  # Pydantic settings
+  "pydantic-settings>=2.5.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
   "httpx>=0.28.0,<1.0.0",
   "pytest>=8.3.0,<9.0.0",
+  "pytest-asyncio>=0.24.0",
   "ruff>=0.9.0,<1.0.0",
 ]
 
@@ -30,6 +80,7 @@ where = ["backend"]
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

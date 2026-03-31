@@ -16,6 +16,7 @@ class OnboardingAssessmentRequest(BaseModel):
     team_size: int = Field(gt=0, le=100_000)
     monthly_budget_usd: float = Field(gt=0)
     contact_email: EmailStr
+    github_username: str = Field(default="", max_length=100)
     needs_onboarding_call: bool = False
 
 
@@ -24,6 +25,7 @@ class OnboardingAssessmentResponse(BaseModel):
     recommended_departments: list[DepartmentOption]
     suggested_rollout: list[str]
     estimated_agent_count: int
+    estimated_monthly_cost_usd: float
     notes: list[str]
 
 

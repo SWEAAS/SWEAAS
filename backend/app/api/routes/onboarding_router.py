@@ -1,4 +1,6 @@
-"""Onboarding endpoints."""
+"""Onboarding endpoints — assessment, department selection, and contact capture."""
+
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
@@ -17,22 +19,29 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 @router.get("/departments", response_model=list[DepartmentOption])
 def list_departments(
-    onboarding_service: OnboardingService = Depends(get_onboarding_service),
+    onboarding_service: Annotated[OnboardingService, Depends(get_onboarding_service)],
 ) -> list[DepartmentOption]:
+    """List available departments with suggested agent counts."""
     return onboarding_service.list_departments()
 
 
 @router.post("/assess", response_model=OnboardingAssessmentResponse)
-def assess_onboarding(
+def assess(
     request: OnboardingAssessmentRequest,
-    onboarding_service: OnboardingService = Depends(get_onboarding_service),
+    onboarding_service: Annotated[OnboardingService, Depends(get_onboarding_service)],
 ) -> OnboardingAssessmentResponse:
+    """Assess a new organization and recommend configuration.
+
+    Returns suggested departments, rollout plan, agent count,
+    and estimated monthly cost based on the provided budget.
+    """
     return onboarding_service.assess(request)
 
 
 @router.post("/contact", response_model=OnboardingContactResponse)
-def create_onboarding_contact(
+def capture_contact(
     request: OnboardingContactRequest,
-    onboarding_service: OnboardingService = Depends(get_onboarding_service),
+    onboarding_service: Annotated[OnboardingService, Depends(get_onboarding_service)],
 ) -> OnboardingContactResponse:
+    """Capture contact details for onboarding follow-up."""
     return onboarding_service.capture_contact(request)

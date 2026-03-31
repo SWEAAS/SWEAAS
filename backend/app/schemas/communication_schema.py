@@ -27,3 +27,26 @@ class CalendarInviteResponse(BaseModel):
     invite_id: str
     meeting_url: str
     status: str
+
+
+class CTOCallRequest(BaseModel):
+    project_id: str
+    topic: str = Field(min_length=2, max_length=500)
+
+
+class CTOCallResponse(BaseModel):
+    conversation_url: str
+    conversation_id: str
+    status: str
+
+
+class ExplainerVideoRequest(BaseModel):
+    project_id: str
+    topic: str = Field(min_length=2, max_length=500)
+    video_type: str = "sprint_summary"
+
+
+class ExplainerVideoResponse(BaseModel):
+    video_id: str
+    status: str
+    estimated_duration_seconds: int

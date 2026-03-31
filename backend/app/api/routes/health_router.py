@@ -1,18 +1,13 @@
-"""Health endpoints."""
+"""Health check endpoints."""
 
 from fastapi import APIRouter
 
-from app.core.config import get_settings
+from app.schemas.common_schema import MessageResponse
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-@router.get("")
-def get_health() -> dict[str, str]:
-    settings = get_settings()
-    return {
-        "status": "ok",
-        "service": settings.app_name,
-        "environment": settings.environment,
-        "version": settings.app_version,
-    }
+@router.get("", response_model=MessageResponse)
+def health_check() -> MessageResponse:
+    """Basic liveness check."""
+    return MessageResponse(message="ok")

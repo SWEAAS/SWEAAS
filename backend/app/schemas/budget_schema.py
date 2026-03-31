@@ -26,7 +26,7 @@ class AgentBudgetSnapshot(BaseModel):
     tokens_used: int
     usage_percent: float
     strike_count: int
-    status: Literal["healthy", "warning", "exhausted"]
+    status: Literal["healthy", "warning", "exhausted", "strike"]
 
 
 class BudgetSummaryResponse(BaseModel):
@@ -35,3 +35,8 @@ class BudgetSummaryResponse(BaseModel):
     total_token_budget: int
     consumption_percent: float
     agents: list[AgentBudgetSnapshot]
+
+
+class StripeCheckoutResponse(BaseModel):
+    checkout_url: str
+    session_id: str
