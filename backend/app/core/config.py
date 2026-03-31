@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
     environment: str = "development"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:3000,http://127.0.0.1:3000,https://app.sweaas.dev"
+    )
+    auth_enforce_jwt: bool = False
 
     # Database
     database_url: str = "postgresql+asyncpg://sweaas:sweaas@localhost:5432/sweaas"

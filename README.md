@@ -13,7 +13,7 @@ Solo founders and small teams get a full engineering department — CTO, manager
 | [`backend/README.md`](backend/README.md) | Python layout, tests, Alembic, customer-facing API table |
 | [`backend/app/README.md`](backend/app/README.md) | `app/` package layers and rules |
 | [`backend/tests/README.md`](backend/tests/README.md) | Pytest how-to |
-| [`frontend/README.md`](frontend/README.md) | Vite app structure, theme, API proxy |
+| [`frontend/README.md`](frontend/README.md) | Vite app structure, theme, Firebase Hosting + CI |
 
 Product vision (not auto-loaded by code): [`prompt.md`](prompt.md), [`plan.md`](plan.md).
 
@@ -35,6 +35,11 @@ Product vision (not auto-loaded by code): [`prompt.md`](prompt.md), [`plan.md`](
 **Optional future:** Twilio voice/SMS (`TWILIO_*` in `.env.example`) for human escalation — hooks reserved in config.
 
 ---
+
+## Cloud (this repo)
+
+- **Google Cloud:** project **`sweass`** — **Firebase Hosting** for the static frontend (see [`frontend/README.md`](frontend/README.md) and [`.github/workflows/deploy-firebase-hosting.yml`](.github/workflows/deploy-firebase-hosting.yml)).
+- **Backend:** FastAPI is not on Firebase; run via Docker locally, Cloud Run, or another host (see [`local_dev.md`](local_dev.md)).
 
 ## Architecture
 

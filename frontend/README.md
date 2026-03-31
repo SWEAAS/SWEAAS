@@ -22,8 +22,8 @@ npm run dev
 
 ## Environment
 
-- No separate `.env` is required for local dev if the proxy is used.  
-- For production, set `VITE_API_BASE_URL` if you add it (not wired by default — extend `src/api/client.ts`).
+- No separate `.env` is required for local dev if the proxy is used.
+- Production builds (including CI) need **`VITE_API_BASE_URL`** set to your public API base URL (see Firebase deploy below). The client reads it in `src/api/client.ts`.
 
 ## Source map (for prompts / new contributors)
 
@@ -55,6 +55,28 @@ npm run build
 ```
 
 Output in `dist/`. Large chunk for `HQView` is expected (Three.js); it is lazy-loaded in `App.tsx`.
+
+## Deploy on Firebase Hosting (Google Cloud)
+
+GCP project: **`sweass`**. Config lives at the repo root: [`firebase.json`](../firebase.json), [`.firebaserc`](../.firebaserc).
+
+### One-time setup
+
+1. In [Firebase Console](https://console.firebase.google.com/), open (or create) project **`sweass`** and enable **Hosting**.
+2. Install CLI: `npm install -g firebase-tools` then `firebase login` and `firebase use sweass` (from repo root).
+3. **GitHub Actions:** add repository secrets:
+   - **`FIREBASE_SERVICE_ACCOUNT_SWEAAS`** — JSON for a service account with permission to deploy Hosting (Firebase Console → Project settings → Service accounts → Generate new private key).
+   - **`VITE_API_BASE_URL`** — public API base, e.g. `https://your-api.run.app/api/v1` or `http://YOUR_PUBLIC_IP/api/v1` if you expose the gateway.
+
+### CI
+
+On push to **`main`** (paths under `frontend/`, `firebase.json`, or the workflow file), [`.github/workflows/deploy-firebase-hosting.yml`](../.github/workflows/deploy-firebase-hosting.yml) builds the frontend and deploys to Firebase Hosting.
+
+### Backend CORS
+
+Add your Firebase Hosting origin to the FastAPI **`CORS_ORIGINS`** (e.g. `https://sweass.web.app` and `https://sweass.firebaseapp.com`, plus any custom domain).
+
+See [local_dev.md](../local_dev.md) for LAN access and API hosting options.
 
 ## Lint
 
