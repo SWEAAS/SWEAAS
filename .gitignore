@@ -1,30 +1,46 @@
-# Python
+# ── Python ───────────────────────────────────
 .venv/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 *.pyc
 *.pyo
 *.pyd
 *.egg-info/
 dist/
 build/
+htmlcov/
+.coverage
+coverage.xml
 
-# Environment
-*.env
+# ── Environment / Secrets ────────────────────
+.env
 .env.*
 !.env.example
-.env
+*.pem
+github-app-key.pem
+twilio_2FA_recovery_code.txt
 
-# OS
+# Firebase / GCP service account keys
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+*service-account*.json
+credentials.json
+
+# ── OS ───────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# IDE / AI tool configs
-.vscode/
-.idea/
 *.swp
 *.swo
+*~
+
+# ── IDE ──────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+
+# ── AI tool / agent configs ──────────────────
 .cursor/
 .adal/
 .agents/
@@ -59,37 +75,38 @@ Thumbs.db
 skills/
 skills-lock.json
 
-# Vendor (cloned repos)
-vendor/
-
-# Node / Frontend
+# ── Node / Frontend ──────────────────────────
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.cache/
+*.tsbuildinfo
 
-# Database
+# ── Backend ──────────────────────────────────
+backend/alembic/versions/__pycache__/
+
+# ── CDK / Infrastructure ────────────────────
+infra/node_modules/
+infra/cdk.out/
+infra/cdk.context.json
+infra/cdk-outputs.json
+
+# ── Docker ───────────────────────────────────
+docker-compose.override.yml
+
+# ── Database ─────────────────────────────────
 *.db
 *.sqlite3
 
-# Alembic
-backend/alembic/versions/__pycache__/
-
-# Docker
-docker-compose.override.yml
-
-# Supabase CLI (some versions write metadata at repo root)
+# ── Supabase CLI ─────────────────────────────
 .supabase/
 
-# GitHub App private key
-*.pem
-github-app-key.pem
+# ── Vendor (cloned repos) ───────────────────
+vendor/
 
-# Firebase (legacy — removed)
+# ── Logs ─────────────────────────────────────
+*.log
 firebase-debug.log
-
-# CDK
-infra/node_modules/
-infra/cdk.out/
-infra/cdk-outputs.json
-
-twilio_2FA_recovery_code.txt
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

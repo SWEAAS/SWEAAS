@@ -1,0 +1,38 @@
+# Slim build context for: docker build -f backend/Dockerfile .
+# Without this, the entire repo (frontend/node_modules, .venv, infra) is sent to the daemon
+# and GitHub Actions often times out or runs out of disk.
+
+.git
+.github
+
+# Local Python — often hundreds of MB
+.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+.ruff_cache
+
+# Frontend / Node — not copied by backend Dockerfile
+frontend/
+node_modules
+**/node_modules
+
+# CDK / infra — not part of backend image
+infra/
+
+# Not needed for pip install / runtime image
+docs/
+supabase/
+vendor/
+htmlcov/
+.coverage
+coverage.xml
+
+# Secrets and local env (defense in depth)
+.env
+.env.*
+*.pem
+*firebase-adminsdk*.json
+*-adminsdk-*.json
+twilio_2FA_recovery_code.txt
