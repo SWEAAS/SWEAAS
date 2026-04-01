@@ -52,10 +52,10 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
             return JSONResponse(status_code=401, content={"detail": "Token has expired."})
         except jwt.InvalidTokenError:
             return JSONResponse(status_code=401, content={"detail": "Invalid token."})
-        except RuntimeError:
+        except RuntimeError as exc:
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Server misconfiguration: JWT secret missing."},
+                content={"detail": f"Server misconfiguration: {exc!s}"},
             )
 
         return await call_next(request)
@@ -72,5 +72,9 @@ def _is_allowlisted_api_route(method: str, path: str, api_prefix: str) -> bool:
     if normalized == f"{api_prefix.rstrip('/')}/feedback/webhooks/intercom" and method == "POST":
         return True
     if normalized == f"{api_prefix.rstrip('/')}/feedback/webhooks/canny" and method == "POST":
+        return True
+    if normalized == f"{api_prefix.rstrip('/')}/github/webhook" and method == "POST":
+        return True
+    if normalized == f"{api_prefix.rstrip('/')}/communication/customer-call/public" and method == "POST":
         return True
     return False

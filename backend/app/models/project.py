@@ -1,5 +1,6 @@
 """Project ORM models."""
 
+import secrets
 import uuid
 from datetime import datetime
 
@@ -8,6 +9,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+def _generate_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 class Project(Base):
@@ -22,6 +27,11 @@ class Project(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     github_repo_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     github_repo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sentry_project_slug: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sentry_dsn: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    public_token: Mapped[str] = mapped_column(
+        String(64), default=_generate_token, unique=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

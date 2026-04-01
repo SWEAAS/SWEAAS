@@ -1,18 +1,20 @@
 import { useState } from "react";
-import { Video, Phone, MessageSquare } from "lucide-react";
+import { Video, Phone, MessageSquare, AlertCircle } from "lucide-react";
 import { communicationApi } from "../api/client";
+import { useProjectStore } from "../store/projectStore";
 
 export default function CTOCallView() {
+  const currentProject = useProjectStore((s) => s.currentProject);
   const [topic, setTopic] = useState("");
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const startCall = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || !currentProject) return;
     setLoading(true);
     try {
       const res = await communicationApi.ctoCall({
-        project_id: "current",
+        project_id: currentProject.id,
         topic,
       });
       setCallUrl(res.data.conversation_url);
@@ -28,7 +30,17 @@ export default function CTOCallView() {
         Schedule a CTO Call
       </h2>
 
-      {!callUrl ? (
+      {!currentProject ? (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 flex items-start gap-3">
+          <AlertCircle size={20} className="text-yellow-600 mt-0.5 shrink-0" />
+          <div>
+            <h3 className="font-semibold text-yellow-800">No project selected</h3>
+            <p className="text-sm text-yellow-700 mt-1">
+              Select a project from the header to start a CTO call.
+            </p>
+          </div>
+        </div>
+      ) : !callUrl ? (
         <div className="bg-white rounded-2xl border border-sweaas-border p-8">
           <div className="flex items-center gap-4 mb-6">
             <div className="p-3 bg-sweaas-blue/10 rounded-xl">
@@ -44,6 +56,10 @@ export default function CTOCallView() {
               </p>
             </div>
           </div>
+
+          <p className="text-sm text-sweaas-text-secondary mb-4">
+            Project: <span className="font-medium text-sweaas-text">{currentProject.name}</span>
+          </p>
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">

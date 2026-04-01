@@ -56,27 +56,33 @@ npm run build
 
 Output in `dist/`. Large chunk for `HQView` is expected (Three.js); it is lazy-loaded in `App.tsx`.
 
-## Deploy on Firebase Hosting (Google Cloud)
+## Deploy on AWS Amplify Hosting
 
-GCP project: **`sweass`**. Config lives at the repo root: [`firebase.json`](../firebase.json), [`.firebaserc`](../.firebaserc).
+Amplify app ID: **`d3rw7tzkg9y12a`** | Custom domain: **sweaas.com** | Region: `us-east-1`.
 
-### One-time setup
+### How it works
 
-1. In [Firebase Console](https://console.firebase.google.com/), open (or create) project **`sweass`** and enable **Hosting**.
-2. Install CLI: `npm install -g firebase-tools` then `firebase login` and `firebase use sweass` (from repo root).
-3. **GitHub Actions:** add repository secrets:
-   - **`FIREBASE_SERVICE_ACCOUNT_SWEAAS`** — JSON for a service account with permission to deploy Hosting (Firebase Console → Project settings → Service accounts → Generate new private key).
-   - **`VITE_API_BASE_URL`** — public API base, e.g. `https://your-api.run.app/api/v1` or `http://YOUR_PUBLIC_IP/api/v1` if you expose the gateway.
+- Amplify Hosting serves the built `dist/` as a static SPA with automatic CDN, HTTPS, and SPA rewrite rules.
+- The build-time env var **`VITE_API_BASE_URL=https://api.sweaas.com/api/v1`** is set in Amplify.
+- Custom domain `sweaas.com` and `www.sweaas.com` are configured with Amplify-managed TLS certificates.
+- DNS is managed via Route 53 (Namecheap NS records point to Route 53).
 
-### CI
+### Manual deploy
 
-On push to **`main`** (paths under `frontend/`, `firebase.json`, or the workflow file), [`.github/workflows/deploy-firebase-hosting.yml`](../.github/workflows/deploy-firebase-hosting.yml) builds the frontend and deploys to Firebase Hosting.
+```bash
+cd frontend
+VITE_API_BASE_URL=https://api.sweaas.com/api/v1 npm run build
+zip -r dist.zip dist/
+# Upload via Amplify console or AWS CLI
+aws amplify create-deployment --app-id d3rw7tzkg9y12a --branch-name main
+# Upload zip to the returned URL, then start-deployment
+```
 
 ### Backend CORS
 
-Add your Firebase Hosting origin to the FastAPI **`CORS_ORIGINS`** (e.g. `https://sweass.web.app` and `https://sweass.firebaseapp.com`, plus any custom domain).
+Ensure **`CORS_ORIGINS`** in `.env` includes `https://sweaas.com` and `https://www.sweaas.com`.
 
-See [local_dev.md](../local_dev.md) for LAN access and API hosting options.
+See [local_dev.md](../local_dev.md) for local development setup.
 
 ## Lint
 

@@ -14,25 +14,21 @@ async def backend_architect_node(state: AgentState) -> dict:
     logger.info("Backend Architect processing task")
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
+        if llm_has_credentials():
             task = state.get("task", "")
-            response = litellm.completion(
-                model="gpt-4o-mini",
+            result = await llm_completion(
                 messages=[
                     {"role": "system", "content": role_prompt[:4000]},
                     {"role": "user", "content": f"Implement: {task}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="eng-be-01",
             )
             return {
                 "current_agent": "backend_architect",
-                "results": [{"agent": "backend_architect", "output": response.choices[0].message.content}],
-                "messages": [{"role": "backend_architect", "content": response.choices[0].message.content}],
+                "results": [{"agent": "backend_architect", "output": result.content}],
+                "messages": [{"role": "backend_architect", "content": result.content}],
             }
     except Exception as exc:
         logger.warning("LLM unavailable for backend architect: %s", exc)

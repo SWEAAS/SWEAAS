@@ -22,15 +22,11 @@ async def product_manager_node(state: AgentState) -> dict:
     logger.info("Product Manager processing %d tasks", len(prod_tasks))
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
+        if llm_has_credentials():
             tasks_text = "\n".join(f"- {t['description']}" for t in prod_tasks)
-            response = litellm.completion(
-                model="gpt-4o-mini",
+            result = await llm_completion(
                 messages=[
                     {
                         "role": "system",
@@ -42,22 +38,27 @@ async def product_manager_node(state: AgentState) -> dict:
                     },
                     {"role": "user", "content": f"Product tasks:\n{tasks_text}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="prd-mgr-01",
             )
             return {
                 "current_agent": "product_manager",
-                "messages": [{"role": "product_manager", "content": response.choices[0].message.content}],
+                "messages": [{"role": "product_manager", "content": result.content}],
                 "status": "assigned",
             }
     except Exception as exc:
         logger.warning("LLM unavailable for product manager: %s", exc)
 
     assignments = [
-        {"specialist": "product_ops", "task": t["description"], "priority": t.get("priority", "medium")}
+        {
+            "specialist": "product_ops",
+            "task": t["description"],
+            "priority": t.get("priority", "medium"),
+        }
         for t in prod_tasks
     ]
+    payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "product_manager",
-        "messages": [{"role": "product_manager", "content": json.dumps({"assignments": assignments})}],
+        "messages": [{"role": "product_manager", "content": payload}],
         "status": "assigned",
     }

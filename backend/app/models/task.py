@@ -22,7 +22,8 @@ class Task(Base):
     )
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    status: Mapped[str] = mapped_column(String(50), default="queued")  # queued | running | completed | blocked | failed
+    # queued | running | completed | blocked | failed
+    status: Mapped[str] = mapped_column(String(50), default="queued")
     priority: Mapped[str] = mapped_column(String(20), default="medium")
     result_summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

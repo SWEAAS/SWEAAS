@@ -34,7 +34,9 @@ AGENTS = [
         "status": "active",
         "daily_token_budget": 150_000,
         "tokens_used_today": 72_000,
-        "description": "Orchestrates engineering specialists. Reviews code and coordinates releases.",
+        "description": (
+            "Orchestrates engineering specialists. Reviews code and coordinates releases."
+        ),
         "current_focus": "Assigning backend API tasks and reviewing frontend PRs.",
         "strike_count": 0,
         "parent_agent_id": "cto-01",
@@ -175,7 +177,9 @@ AGENTS = [
         "status": "active",
         "daily_token_budget": 100_000,
         "tokens_used_today": 30_000,
-        "description": "Manages product roadmap, prioritizes features, coordinates with stakeholders.",
+        "description": (
+            "Manages product roadmap, prioritizes features, coordinates with stakeholders."
+        ),
         "current_focus": "Preparing roadmap for next quarter.",
         "strike_count": 0,
         "parent_agent_id": "cto-01",
@@ -205,7 +209,10 @@ AGENTS = [
         "status": "active",
         "daily_token_budget": 90_000,
         "tokens_used_today": 22_000,
-        "description": "Orchestrates customer-facing agents: triages feedback, escalates to product/engineering.",
+        "description": (
+            "Orchestrates customer-facing agents: triages feedback, escalates to "
+            "product/engineering."
+        ),
         "current_focus": "Routing user feedback tickets and monitoring satisfaction signals.",
         "strike_count": 0,
         "parent_agent_id": "cto-01",

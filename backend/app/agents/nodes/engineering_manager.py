@@ -11,6 +11,15 @@ from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
+
+def _eng_task_row(specialist: str, task: dict) -> dict:
+    return {
+        "specialist": specialist,
+        "task": task["description"],
+        "priority": task.get("priority", "medium"),
+    }
+
+
 ENG_MGR_PROMPT = """You are the Engineering Manager. Your role is to:
 
 1. RECEIVE engineering tasks from the CTO
@@ -25,7 +34,11 @@ ENG_MGR_PROMPT = """You are the Engineering Manager. Your role is to:
 Respond with JSON:
 {
   "assignments": [
-    {"specialist": "frontend_dev|backend_architect|devops|qa_tester", "task": "description", "priority": "high|medium|low"}
+    {
+      "specialist": "frontend_dev|backend_architect|devops|qa_tester",
+      "task": "description",
+      "priority": "high|medium|low"
+    }
   ],
   "status": "assigned"
 }"""
@@ -37,33 +50,29 @@ async def engineering_manager_node(state: AgentState) -> dict:
     eng_tasks = [s for s in subtasks if s.get("department") == "engineering"]
 
     if not eng_tasks:
+        empty_msg = "No engineering tasks to process."
         return {
             "current_agent": "engineering_manager",
-            "messages": [{"role": "engineering_manager", "content": "No engineering tasks to process."}],
+            "messages": [{"role": "engineering_manager", "content": empty_msg}],
         }
 
     logger.info("Engineering Manager processing %d tasks", len(eng_tasks))
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
+        if llm_has_credentials():
             tasks_text = "\n".join(f"- {t['description']}" for t in eng_tasks)
-            response = litellm.completion(
-                model="gpt-4o-mini",
+            result = await llm_completion(
                 messages=[
                     {"role": "system", "content": ENG_MGR_PROMPT},
                     {"role": "user", "content": f"Engineering tasks:\n{tasks_text}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="eng-mgr-01",
             )
-            content = response.choices[0].message.content
             return {
                 "current_agent": "engineering_manager",
-                "messages": [{"role": "engineering_manager", "content": content}],
+                "messages": [{"role": "engineering_manager", "content": result.content}],
                 "status": "assigned",
             }
     except Exception as exc:
@@ -73,16 +82,17 @@ async def engineering_manager_node(state: AgentState) -> dict:
     for task in eng_tasks:
         desc = task["description"].lower()
         if any(kw in desc for kw in ["ui", "frontend", "react", "component", "css"]):
-            assignments.append({"specialist": "frontend_dev", "task": task["description"], "priority": task.get("priority", "medium")})
+            assignments.append(_eng_task_row("frontend_dev", task))
         elif any(kw in desc for kw in ["deploy", "ci", "docker", "infra", "pipeline"]):
-            assignments.append({"specialist": "devops", "task": task["description"], "priority": task.get("priority", "medium")})
+            assignments.append(_eng_task_row("devops", task))
         elif any(kw in desc for kw in ["test", "qa", "quality", "regression"]):
-            assignments.append({"specialist": "qa_tester", "task": task["description"], "priority": task.get("priority", "medium")})
+            assignments.append(_eng_task_row("qa_tester", task))
         else:
-            assignments.append({"specialist": "backend_architect", "task": task["description"], "priority": task.get("priority", "medium")})
+            assignments.append(_eng_task_row("backend_architect", task))
 
+    payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "engineering_manager",
-        "messages": [{"role": "engineering_manager", "content": json.dumps({"assignments": assignments})}],
+        "messages": [{"role": "engineering_manager", "content": payload}],
         "status": "assigned",
     }

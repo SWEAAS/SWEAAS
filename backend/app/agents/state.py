@@ -4,7 +4,7 @@ All agents in the graph read from and write to this state. It flows
 through the supervisor -> manager -> specialist pipeline.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from typing_extensions import TypedDict
 

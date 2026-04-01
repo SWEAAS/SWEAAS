@@ -6,6 +6,7 @@ interface Project {
   slug: string;
   description: string;
   github_repo_url: string | null;
+  public_token: string | null;
   status: string;
 }
 

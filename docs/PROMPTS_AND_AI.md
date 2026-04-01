@@ -4,7 +4,7 @@ Use this document together with the root [README](../README.md) whenever you ope
 
 ## What SWEAAS is (one paragraph)
 
-SWEAAS is **SWE as a Service**: a FastAPI backend plus React/Vite/Three.js frontend. AI agents are organized in a hierarchy (CTO → department managers → specialists). **Product users** talk to the **Customer Support** agent; **owners** talk to the **CTO** and engineering agents. User feedback is collected via `/api/v1/feedback` and optional webhooks (Intercom, Canny). Sandboxed execution uses E2B; memory uses ChromaDB; billing uses LiteLLM + Stripe.
+SWEAAS is **SWE as a Service**: a FastAPI backend plus React/Vite/Three.js frontend. AI agents are organized in a hierarchy (CTO → department managers → specialists). **Product users** talk to the **Customer Support** agent; **owners** talk to the **CTO** and engineering agents. User feedback is collected via `/api/v1/feedback` and optional webhooks (Intercom, Canny). Sandboxed execution uses E2B; memory uses ChromaDB; billing uses BudgetTracker + Stripe.
 
 ## Ground rules for codegen
 

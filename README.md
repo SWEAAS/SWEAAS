@@ -38,36 +38,48 @@ Product vision (not auto-loaded by code): [`prompt.md`](prompt.md), [`plan.md`](
 
 ## Cloud (this repo)
 
-- **Google Cloud:** project **`sweass`** — **Firebase Hosting** for the static frontend (see [`frontend/README.md`](frontend/README.md) and [`.github/workflows/deploy-firebase-hosting.yml`](.github/workflows/deploy-firebase-hosting.yml)).
-- **Backend:** FastAPI is not on Firebase; run via Docker locally, Cloud Run, or another host (see [`local_dev.md`](local_dev.md)).
+- **AWS** (account `802528391167`, region `us-east-1`):
+  - **Frontend:** AWS Amplify Hosting at **sweaas.com** (app ID `d3rw7tzkg9y12a`). SPA rewrite, auto-SSL, CDN.
+  - **Backend:** FastAPI on ECS Fargate behind ALB at **api.sweaas.com**. Docker image in ECR (`sweaas-backend`).
+  - **Database:** RDS PostgreSQL 16 (db.t4g.micro) with pgvector extension.
+  - **Redis:** ElastiCache (cache.t3.micro).
+  - **ChromaDB:** ECS Fargate with Cloud Map service discovery (`chromadb.sweaas.local`).
+  - **DNS:** Route 53 hosted zone for `sweaas.com`. Namecheap NS records point to Route 53.
+  - **Secrets:** AWS Secrets Manager (`sweaas/app-secrets`, `sweaas/rds-credentials`).
+  - **IaC:** CDK (TypeScript) in [`infra/`](infra/).
+  - **CI/CD:** [`.github/workflows/deploy-aws.yml`](.github/workflows/deploy-aws.yml) builds + pushes Docker to ECR + updates ECS. Amplify handles frontend deploys.
+- **Local dev:** Docker Compose for PostgreSQL, Redis, ChromaDB (unchanged). See [`local_dev.md`](local_dev.md).
 
 ## Architecture
 
 ```
+          sweaas.com (Amplify CDN)
+                │
 Frontend (React + Vite + Three.js)
-        │
-        ▼
-  FastAPI API Layer ── Auth Middleware (Supabase JWT)
-        │
+                │
+          api.sweaas.com (ALB)
+                │
+  FastAPI on ECS Fargate ── Auth Middleware (Supabase JWT)
+                │
    Service Layer
-   ├── GitHubService      → GitHub App API (repo CRUD)
+   ├── GitHubService        → GitHub App API (repo CRUD)
    ├── OrchestrationService → LangGraph agent hierarchy
-   ├── SandboxService     → E2B Firecracker microVMs
-   ├── BudgetService      → LiteLLM + Stripe billing
-   ├── MemoryService      → ChromaDB vector store
+   ├── SandboxService       → E2B Firecracker microVMs
+   ├── BudgetService        → BudgetTracker + Stripe billing
+   ├── MemoryService        → ChromaDB vector store
    ├── CommunicationService → AgentMail + Tavus + Golpo
    └── ObservabilityService → Sentry + metrics
-        │
+                │
    Agent Hierarchy (LangGraph)
    ├── CTO Agent (supervisor)
    ├── Engineering Manager → Frontend Dev, Backend Architect, DevOps, QA
-   ├── Product Manager    → Product Ops
-   └── Marketing Manager  → Growth Analyst
-        │
-   Infrastructure
-   ├── PostgreSQL + pgvector
-   ├── Redis (budget tracking)
-   └── ChromaDB (agent memory)
+   ├── Product Manager     → Product Ops
+   └── Marketing Manager   → Growth Analyst
+                │
+   AWS Infrastructure
+   ├── RDS PostgreSQL 16 + pgvector   (db.t4g.micro)
+   ├── ElastiCache Redis 7            (cache.t3.micro)
+   └── ChromaDB on ECS Fargate        (sweaas.local Cloud Map)
 ```
 
 ## Quick Start
@@ -154,7 +166,10 @@ SWEAAS/
 ├── vendor/                      # Cloned dependencies (gitignored — clone locally)
 │   ├── agency-agents/           # Agent role definitions
 │   └── nemoclaw/                # NVIDIA NemoClaw blueprints
-├── docker-compose.yml           # PostgreSQL, Redis, ChromaDB
+├── infra/                       # AWS CDK (TypeScript) infrastructure
+│   ├── bin/infra.ts            # CDK app entrypoint
+│   └── lib/sweaas-stack.ts     # All AWS resources (VPC, RDS, ECS, ALB, etc.)
+├── docker-compose.yml           # Local dev: PostgreSQL, Redis, ChromaDB
 ├── pyproject.toml               # Python dependencies
 ├── prompt.md / plan.md          # Product vision (reference)
 └── .env.example                 # All required env vars
@@ -190,10 +205,10 @@ SWEAAS/
 | Service        | Purpose                              | Config Key               |
 | -------------- | ------------------------------------ | ------------------------ |
 | **LangGraph**  | Hierarchical agent orchestration     | `OPENAI_API_KEY`         |
-| **LiteLLM**    | Multi-model routing + budget         | `LITELLM_MASTER_KEY`     |
+| **OpenAI/xAI** | Multi-model routing + budget         | `XAI_API_KEY`            |
 | **E2B**        | Sandboxed code execution             | `E2B_API_KEY`            |
 | **ChromaDB**   | Agent memory / codebase RAG          | `CHROMA_HOST`            |
-| **Supabase**   | Authentication + PostgreSQL          | `SUPABASE_*`             |
+| **Supabase**   | Authentication + PostgreSQL          | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` |
 | **GitHub App** | Repo creation + collaborators        | `GITHUB_APP_*`           |
 | **Sentry**     | Error tracking + auto-fix discovery  | `SENTRY_DSN`             |
 | **Stripe**     | Subscription billing                 | `STRIPE_SECRET_KEY`      |

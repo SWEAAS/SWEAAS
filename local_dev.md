@@ -7,6 +7,24 @@ Every developer runs their own local stack. No shared backend, no tunnels — ju
 - **Docker** and **Docker Compose** (v2) — [Install Docker Desktop](https://docs.docker.com/get-docker/)
 - A copy of `.env` at the repo root (see setup below)
 
+## Supabase CLI (linking this repo to your hosted project)
+
+The repo includes `supabase/` from `supabase init` (local CLI config). **Linking** ties it to your cloud project; it requires **your** Supabase account — run these on your machine, not in CI, unless you use a token.
+
+1. Install the CLI: `brew install supabase/tap/supabase` (or see [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)).
+2. Authenticate **one** of these ways:
+   - **Browser:** `supabase login`
+   - **Token:** create a [personal access token](https://supabase.com/dashboard/account/tokens), then either export `SUPABASE_ACCESS_TOKEN=...` for the session or add it to `.env` (same name) and run `set -a && source .env && set +a` before the next step.
+3. From the repo root:
+
+```bash
+supabase link --project-ref bzsxqzgryiemyzeeefuw
+```
+
+You may be prompted for the **database password** (Settings → Database). After linking, use `supabase db pull` / migrations as needed.
+
+Fill **app** env vars from [Project Settings → API](https://supabase.com/dashboard/project/bzsxqzgryiemyzeeefuw/settings/api): **`SUPABASE_URL`**, **`SUPABASE_PUBLISHABLE_KEY`**, **`SUPABASE_SECRET_KEY`**. User access tokens are verified with **JWKS** (ES256/RS256 from Supabase JWT Signing Keys), not a shared HS256 secret.
+
 ## Quick Start
 
 ```bash
@@ -45,8 +63,13 @@ instead of `localhost`. You do not need to change these manually.
 At minimum, set these for a functional local stack:
 
 ```
-OPENAI_API_KEY=sk-...        # Required for agent LLM calls
-SUPABASE_JWT_SECRET=...      # Required when AUTH_ENFORCE_JWT=true
+# LLM for LangGraph agents — pick one provider:
+OPENAI_API_KEY=sk-...        # Default when LLM_DEFAULT_MODEL is OpenAI (e.g. gpt-4o-mini)
+# Or use Grok (set LLM_DEFAULT_MODEL=xai/grok-2 — xAI uses OpenAI-compatible API):
+XAI_API_KEY=xai-...
+LLM_DEFAULT_MODEL=xai/grok-2
+
+SUPABASE_URL=https://<ref>.supabase.co   # Required when AUTH_ENFORCE_JWT=true (JWKS)
 ```
 
 All other API keys (Stripe, Sentry, E2B, etc.) are optional — features that
@@ -58,10 +81,10 @@ When you point a production web app at this backend, set:
 
 ```
 AUTH_ENFORCE_JWT=true
-SUPABASE_JWT_SECRET=<your Supabase JWT signing secret>
+SUPABASE_URL=https://<ref>.supabase.co
 ```
 
-With `AUTH_ENFORCE_JWT=true`, the process **refuses to start** if `SUPABASE_JWT_SECRET` is empty. Almost all `/api/v1` routes require a valid Supabase access token (`Authorization: Bearer <jwt>`). These stay public without a user JWT: `GET /api/v1/health`, Stripe `POST /api/v1/budget/webhook`, and feedback provider webhooks under `/api/v1/feedback/webhooks/*`. OpenAPI `/docs`, `/redoc`, and `/openapi.json` are **disabled** while enforcement is on.
+With `AUTH_ENFORCE_JWT=true`, the process **refuses to start** if `SUPABASE_URL` is empty (JWKS verification). Almost all `/api/v1` routes require a valid Supabase access token (`Authorization: Bearer <jwt>`). These stay public without a user JWT: `GET /api/v1/health`, Stripe `POST /api/v1/budget/webhook`, and feedback provider webhooks under `/api/v1/feedback/webhooks/*`. OpenAPI `/docs`, `/redoc`, and `/openapi.json` are **disabled** while enforcement is on.
 
 List every browser origin that should call the API in **`CORS_ORIGINS`** (comma-separated), for example local dev and your deployed frontend URL.
 
@@ -114,20 +137,57 @@ docker compose down -v
 docker compose up --build
 ```
 
-## Deploying the frontend (Firebase Hosting on GCP)
+## Stripe webhooks (local dev)
 
-**Google Cloud project:** `sweass`. The static Vite app deploys with **Firebase Hosting**; config is [`firebase.json`](firebase.json) (build output: `frontend/dist`). SPA rewrites are defined there.
+Stripe cannot POST to `localhost`. Use the **Stripe CLI** to forward test webhooks to the backend.
 
-The FastAPI backend is **not** served by Firebase — deploy it separately (Cloud Run, Render, etc.) when ready.
+1. Install and log in: [Stripe CLI](https://stripe.com/docs/stripe-cli) → `stripe login`.
+2. Start the API on port **8000** (`docker compose up` or local `uvicorn`).
+3. In a separate terminal, from anywhere:
 
-1. Enable **Firebase Hosting** in the [Firebase console](https://console.firebase.google.com/) for project `sweass`.
-2. Configure GitHub secrets **`FIREBASE_SERVICE_ACCOUNT_SWEAAS`** and **`VITE_API_BASE_URL`** (see [`frontend/README.md`](frontend/README.md)).
-3. Push to **`main`** to run [`.github/workflows/deploy-firebase-hosting.yml`](.github/workflows/deploy-firebase-hosting.yml), or deploy manually: `cd frontend && npm ci && npm run build && cd .. && firebase deploy --only hosting --project sweass` (with `VITE_API_BASE_URL` set for the build).
-4. Add your Hosting URLs to backend **`CORS_ORIGINS`** (e.g. `https://sweass.web.app`).
+```bash
+stripe listen --forward-to localhost:8000/api/v1/budget/webhook
+```
 
-## Deploying the backend
+4. The CLI prints **`Ready! ... Your webhook signing secret is whsec_...`**. Copy that value into **`.env`** as **`STRIPE_WEBHOOK_SECRET`** (test mode only). **Each new `stripe listen` run may print a different secret** — update `.env` if you restart the CLI.
+5. Trigger a test event (with `listen` still running):
 
-The API is a normal Docker image ([`backend/Dockerfile`](backend/Dockerfile)). On Google Cloud, **Cloud Run** is the natural fit for the same GCP project. Other options: Render, Fly.io, Railway. Use managed Postgres/Redis or containers.
+```bash
+stripe trigger checkout.session.completed
+```
+
+6. The backend should respond **200** with a body like `{"message":"ok:checkout.session.completed"}` when verification succeeds.
+
+If `STRIPE_WEBHOOK_SECRET` is unset or still the placeholder `whsec_your-webhook-secret`, the handler accepts webhooks **without** verifying signatures (convenient but insecure — use only for quick checks).
+
+**Stripe CLI vs `.env`:** `stripe listen` / `stripe trigger` use the account from `stripe login`. Your app uses **`STRIPE_SECRET_KEY` in `.env`**. Both should be the same Stripe account (compare the middle segment of the Test secret key, e.g. `sk_test_51THF2mK0YOQL06qe…`, with `stripe config --list`).
+
+**Docker + Stripe keys:** Compose injects `.env` when the **backend container is created**. If you change `STRIPE_*` in `.env` but still see `Invalid API Key` or placeholder values inside the container, recreate the backend: `docker compose up -d --force-recreate backend`.
+
+## Deploying to AWS
+
+All production infrastructure runs on **AWS** (account `802528391167`, `us-east-1`). IaC is in [`infra/`](infra/) (CDK TypeScript).
+
+### Frontend (Amplify Hosting)
+
+- App ID: `d3rw7tzkg9y12a` | Domain: **sweaas.com**
+- Build locally: `cd frontend && VITE_API_BASE_URL=https://api.sweaas.com/api/v1 npm run build`
+- Deploy via Amplify console or CLI (see [`frontend/README.md`](frontend/README.md))
+
+### Backend (ECS Fargate + ALB)
+
+- Docker image in ECR: `802528391167.dkr.ecr.us-east-1.amazonaws.com/sweaas-backend`
+- Build and push: `docker build --platform linux/amd64 -t sweaas-backend -f backend/Dockerfile . && docker tag sweaas-backend:latest <ecr-uri>:latest && docker push <ecr-uri>:latest`
+- Update ECS: `aws ecs update-service --cluster sweaas --service backend --force-new-deployment`
+- CI/CD: Push to `main` (backend paths) triggers [`.github/workflows/deploy-aws.yml`](.github/workflows/deploy-aws.yml)
+
+### Infrastructure changes
+
+```bash
+cd infra
+npx cdk diff    # preview
+npx cdk deploy  # apply
+```
 
 ## Troubleshooting
 

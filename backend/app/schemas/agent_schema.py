@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class AgentSummary(BaseModel):

@@ -1,9 +1,12 @@
 """Budget and billing endpoints — token tracking and Stripe integration."""
 
+import logging
 from typing import Annotated
 
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.core.config import get_settings
 from app.core.dependencies import get_budget_service
 from app.schemas.budget_schema import (
     AgentBudgetSnapshot,
@@ -15,7 +18,13 @@ from app.schemas.budget_schema import (
 from app.schemas.common_schema import MessageResponse
 from app.services.budget_service import BudgetService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/budget", tags=["budget"])
+
+
+def _stripe_webhook_secret_configured(secret: str) -> bool:
+    s = (secret or "").strip()
+    return bool(s) and "your-webhook" not in s.lower()
 
 
 @router.get("/summary", response_model=BudgetSummaryResponse)
@@ -58,10 +67,44 @@ async def create_checkout(
 
 
 @router.post("/webhook", response_model=MessageResponse)
-async def stripe_webhook(request: Request) -> MessageResponse:
-    """Handle Stripe webhook events (subscription updates, payment failures, etc.).
+async def stripe_webhook(
+    request: Request,
+    budget_service: Annotated[BudgetService, Depends(get_budget_service)],
+) -> MessageResponse:
+    """Verify Stripe signature (when ``STRIPE_WEBHOOK_SECRET`` is set), then handle events."""
+    settings = get_settings()
+    body = await request.body()
+    sig = request.headers.get("stripe-signature")
 
-    Verifies the webhook signature and processes relevant event types
-    to keep budget allocations in sync with billing status.
-    """
-    return MessageResponse(message="Webhook received.")
+    if not _stripe_webhook_secret_configured(settings.stripe_webhook_secret):
+        logger.warning(
+            "Stripe webhook received but STRIPE_WEBHOOK_SECRET is unset or placeholder; "
+            "skipping signature verification (dev only)."
+        )
+        return MessageResponse(message="Webhook received (signature not verified).")
+
+    if not sig:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing Stripe-Signature header.",
+        )
+
+    try:
+        event = stripe.Webhook.construct_event(
+            body,
+            sig,
+            settings.stripe_webhook_secret,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid webhook payload.",
+        ) from exc
+    except stripe.SignatureVerificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Stripe signature.",
+        ) from exc
+
+    msg = budget_service.handle_stripe_webhook_event(event)
+    return MessageResponse(message=msg)

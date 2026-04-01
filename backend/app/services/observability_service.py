@@ -52,18 +52,24 @@ class ObservabilityService:
             reports=[ObservabilityReport(**r) for r in REPORTS]
         )
 
-    async def list_sentry_issues(self) -> SentryIssueListResponse:
-        """Fetch unresolved Sentry issues for the SWEAAS project.
+    async def list_sentry_issues(
+        self,
+        project_slug: str | None = None,
+    ) -> SentryIssueListResponse:
+        """Fetch unresolved Sentry issues for a project.
 
-        Agents can use this data to autonomously discover and fix bugs.
-        Requires SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT.
+        When *project_slug* is ``None`` (the default), falls back to the
+        global ``SENTRY_PROJECT`` setting (the SWEAAS platform project).
+        Pass a customer project's ``sentry_project_slug`` to query issues
+        for that specific project.
         """
         if not settings.sentry_auth_token:
             return SentryIssueListResponse(issues=[])
 
+        slug = project_slug or settings.sentry_project
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                f"https://sentry.io/api/0/projects/{settings.sentry_org}/{settings.sentry_project}/issues/",
+                f"https://sentry.io/api/0/projects/{settings.sentry_org}/{slug}/issues/",
                 headers={"Authorization": f"Bearer {settings.sentry_auth_token}"},
                 params={"query": "is:unresolved", "limit": 25},
             )

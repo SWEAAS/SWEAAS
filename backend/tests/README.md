@@ -28,7 +28,7 @@ cd backend && PYTHONPATH=. pytest tests -q
 
 - Prefer testing **public API** behavior (`test_api`) for routes.  
 - Use **real** `TestClient` against `app.main:app` — no mocks unless testing a pure function.  
-- Auth: with empty `SUPABASE_JWT_SECRET`, middleware runs in **dev user** mode (no Bearer required).  
+- Auth: with `AUTH_ENFORCE_JWT=false`, `get_current_user` uses the **dev user** placeholder (no Bearer required).  
 
 ## Adding tests for a new route
 

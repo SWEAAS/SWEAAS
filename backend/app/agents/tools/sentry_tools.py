@@ -1,14 +1,15 @@
-"""LangChain tools for querying Sentry error data."""
+"""LangChain tools for querying Sentry error data per customer project."""
 
 from langchain_core.tools import tool
 
 
 @tool
-def get_unresolved_issues(project_slug: str = "sweaas") -> str:
-    """Fetch unresolved issues from Sentry for a project.
+def get_unresolved_issues(project_slug: str) -> str:
+    """Fetch unresolved issues from Sentry for a specific project.
 
     Args:
-        project_slug: Sentry project slug.
+        project_slug: Sentry project slug (from the customer project's
+            ``sentry_project_slug`` field, NOT the global SWEAAS platform project).
 
     Returns:
         JSON string of unresolved issues.

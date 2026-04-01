@@ -20,11 +20,44 @@ build/
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE / AI tool configs
 .vscode/
 .idea/
 *.swp
 *.swo
+.cursor/
+.adal/
+.agents/
+.augment/
+.bob/
+.claude/
+.codebuddy/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.factory/
+.goose/
+.iflow/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.vibe/
+.windsurf/
+.zencoder/
+skills/
+skills-lock.json
 
 # Vendor (cloned repos)
 vendor/
@@ -44,9 +77,19 @@ backend/alembic/versions/__pycache__/
 # Docker
 docker-compose.override.yml
 
-# Firebase
+# Supabase CLI (some versions write metadata at repo root)
+.supabase/
+
+# GitHub App private key
+*.pem
+github-app-key.pem
+
+# Firebase (legacy — removed)
 firebase-debug.log
-firestore-debug.log
-ui-debug.log
-*firebase-adminsdk*.json
-*-adminsdk-*.json
+
+# CDK
+infra/node_modules/
+infra/cdk.out/
+infra/cdk-outputs.json
+
+twilio_2FA_recovery_code.txt

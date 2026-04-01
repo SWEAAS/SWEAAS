@@ -28,32 +28,35 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
-    # Supabase Auth
+    # Supabase: publishable + secret (API Keys); user JWTs via JWKS using SUPABASE_URL
     supabase_url: str = ""
-    supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
-    supabase_jwt_secret: str = ""
+    supabase_publishable_key: str = ""
+    supabase_secret_key: str = ""
 
     # GitHub App
     github_app_id: str = ""
+    github_client_id: str = ""
     github_app_private_key_path: str = ""
     github_org_name: str = "SWEAAS"
     github_webhook_secret: str = ""
+    github_webhook_proxy_url: str = ""
 
-    # LiteLLM
-    litellm_master_key: str = ""
-    litellm_api_base: str = "http://localhost:4000"
+    # LLM — direct provider calls via OpenAI / Anthropic SDKs
+    # Model format: xai/grok-3, gpt-4o-mini, claude-3-5-haiku-20241022, etc.
+    llm_default_model: str = "gpt-4o-mini"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    xai_api_key: str = ""
 
     # E2B
     e2b_api_key: str = ""
 
-    # Sentry
+    # Sentry (platform monitoring + per-project provisioning)
     sentry_dsn: str = ""
     sentry_auth_token: str = ""
     sentry_org: str = ""
     sentry_project: str = "sweaas"
+    sentry_team: str = ""
 
     # Stripe
     stripe_secret_key: str = ""
@@ -80,6 +83,9 @@ class Settings(BaseSettings):
 
     # Golpo
     golpo_api_key: str = ""
+
+    # Greptile (AI code review + semantic code queries)
+    greptile_api_key: str = ""
 
     # ChromaDB
     chroma_host: str = "localhost"

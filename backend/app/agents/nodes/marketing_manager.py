@@ -14,23 +14,20 @@ async def marketing_manager_node(state: AgentState) -> dict:
     mkt_tasks = [s for s in subtasks if s.get("department") == "marketing"]
 
     if not mkt_tasks:
+        empty_msg = "No marketing tasks to process."
         return {
             "current_agent": "marketing_manager",
-            "messages": [{"role": "marketing_manager", "content": "No marketing tasks to process."}],
+            "messages": [{"role": "marketing_manager", "content": empty_msg}],
         }
 
     logger.info("Marketing Manager processing %d tasks", len(mkt_tasks))
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
+        if llm_has_credentials():
             tasks_text = "\n".join(f"- {t['description']}" for t in mkt_tasks)
-            response = litellm.completion(
-                model="gpt-4o-mini",
+            result = await llm_completion(
                 messages=[
                     {
                         "role": "system",
@@ -42,22 +39,27 @@ async def marketing_manager_node(state: AgentState) -> dict:
                     },
                     {"role": "user", "content": f"Marketing tasks:\n{tasks_text}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="mkt-mgr-01",
             )
             return {
                 "current_agent": "marketing_manager",
-                "messages": [{"role": "marketing_manager", "content": response.choices[0].message.content}],
+                "messages": [{"role": "marketing_manager", "content": result.content}],
                 "status": "assigned",
             }
     except Exception as exc:
         logger.warning("LLM unavailable for marketing manager: %s", exc)
 
     assignments = [
-        {"specialist": "growth_analyst", "task": t["description"], "priority": t.get("priority", "medium")}
+        {
+            "specialist": "growth_analyst",
+            "task": t["description"],
+            "priority": t.get("priority", "medium"),
+        }
         for t in mkt_tasks
     ]
+    payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "marketing_manager",
-        "messages": [{"role": "marketing_manager", "content": json.dumps({"assignments": assignments})}],
+        "messages": [{"role": "marketing_manager", "content": payload}],
         "status": "assigned",
     }

@@ -4,8 +4,6 @@ import os
 
 # Ensure JWT enforcement does not block API tests (pytest process env wins over .env file).
 os.environ["AUTH_ENFORCE_JWT"] = "false"
-# Without a secret, get_current_user uses the dev placeholder (matches local dev without Supabase).
-os.environ["SUPABASE_JWT_SECRET"] = ""
 
 from app.core.config import get_settings
 

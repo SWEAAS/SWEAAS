@@ -1,6 +1,5 @@
 """Schemas for observability and reporting endpoints."""
 
-from typing import Literal
 
 from pydantic import BaseModel
 

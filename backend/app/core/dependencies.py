@@ -1,15 +1,17 @@
 """FastAPI dependency injection factories."""
 
 from app.services.agent_service import AgentService
-from app.services.feedback_service import FeedbackService
 from app.services.budget_service import BudgetService
 from app.services.communication_service import CommunicationService
+from app.services.feedback_service import FeedbackService
 from app.services.github_service import GitHubService
 from app.services.memory_service import MemoryService
 from app.services.observability_service import ObservabilityService
 from app.services.onboarding_service import OnboardingService
 from app.services.orchestration_service import OrchestrationService
 from app.services.sandbox_service import SandboxService
+from app.services.greptile_service import GreptileService
+from app.services.sentry_service import SentryService
 
 
 def get_agent_service() -> AgentService:
@@ -50,3 +52,11 @@ def get_orchestration_service() -> OrchestrationService:
 
 def get_feedback_service() -> FeedbackService:
     return FeedbackService()
+
+
+def get_greptile_service() -> GreptileService:
+    return GreptileService()
+
+
+def get_sentry_service() -> SentryService:
+    return SentryService()

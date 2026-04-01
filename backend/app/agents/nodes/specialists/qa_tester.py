@@ -2,7 +2,6 @@
 
 import logging
 
-from app.agents.prompts.role_loader import load_role_prompt
 from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -10,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 async def qa_tester_node(state: AgentState) -> dict:
     """Execute testing and quality assurance tasks."""
-    role_prompt = load_role_prompt("qa_tester")
     logger.info("QA Tester processing task")
 
     return {

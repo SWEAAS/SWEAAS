@@ -35,7 +35,8 @@ class OnboardingService:
         ]
         if request.needs_onboarding_call:
             rollout.append(
-                "Schedule a guided onboarding call to review calendars, email, and budget guardrails."
+                "Schedule a guided onboarding call to review calendars, email, and "
+                "budget guardrails."
             )
 
         notes = [

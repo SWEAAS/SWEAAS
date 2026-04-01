@@ -40,7 +40,12 @@ def load_role_prompt(role: str) -> str:
         return _generic_prompt(role)
 
     content = full_path.read_text(encoding="utf-8")
-    logger.info("Loaded role prompt for '%s' from %s (%d chars)", role, full_path.name, len(content))
+    logger.info(
+        "Loaded role prompt for '%s' from %s (%d chars)",
+        role,
+        full_path.name,
+        len(content),
+    )
     return content
 
 

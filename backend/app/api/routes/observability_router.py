@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import get_observability_service
 from app.schemas.observability_schema import (
@@ -34,9 +34,14 @@ def list_reports(
 @router.get("/sentry/issues", response_model=SentryIssueListResponse)
 async def list_sentry_issues(
     obs_service: Annotated[ObservabilityService, Depends(get_observability_service)],
+    project_slug: Annotated[
+        str | None,
+        Query(description="Sentry project slug; omit to query the SWEAAS platform project"),
+    ] = None,
 ) -> SentryIssueListResponse:
-    """Fetch unresolved Sentry issues for the SWEAAS project.
+    """Fetch unresolved Sentry issues.
 
-    AI agents use this data to autonomously discover and fix bugs.
+    Pass ``project_slug`` to query a specific customer project. Omit it
+    to query the global SWEAAS platform project.
     """
-    return await obs_service.list_sentry_issues()
+    return await obs_service.list_sentry_issues(project_slug=project_slug)

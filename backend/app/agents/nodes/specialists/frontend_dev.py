@@ -14,25 +14,21 @@ async def frontend_dev_node(state: AgentState) -> dict:
     logger.info("Frontend Dev processing task")
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
+        if llm_has_credentials():
             task = state.get("task", "")
-            response = litellm.completion(
-                model="gpt-4o-mini",
+            result = await llm_completion(
                 messages=[
                     {"role": "system", "content": role_prompt[:4000]},
                     {"role": "user", "content": f"Implement: {task}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="eng-fe-01",
             )
             return {
                 "current_agent": "frontend_dev",
-                "results": [{"agent": "frontend_dev", "output": response.choices[0].message.content}],
-                "messages": [{"role": "frontend_dev", "content": response.choices[0].message.content}],
+                "results": [{"agent": "frontend_dev", "output": result.content}],
+                "messages": [{"role": "frontend_dev", "content": result.content}],
             }
     except Exception as exc:
         logger.warning("LLM unavailable for frontend dev: %s", exc)

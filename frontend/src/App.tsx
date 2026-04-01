@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import { useAuthStore } from "./store/authStore";
 import CTOCallView from "./views/CTOCallView";
+import CustomerCallPreview from "./views/CustomerCallPreview";
 import DashboardView from "./views/DashboardView";
 import LoginView from "./views/LoginView";
 import OnboardingView from "./views/OnboardingView";
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/budget" element={<DashboardView />} />
           <Route path="/reports" element={<DashboardView />} />
           <Route path="/cto-call" element={<CTOCallView />} />
+          <Route path="/customer-support" element={<CustomerCallPreview />} />
           <Route path="/settings" element={<SettingsView />} />
         </Route>
 

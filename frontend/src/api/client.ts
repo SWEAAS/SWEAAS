@@ -83,6 +83,13 @@ export const communicationApi = {
     topic: string;
     user_email?: string;
   }) => api.post("/communication/customer-call", data),
+  /** Public endpoint for end users — authenticates via X-Project-Token, not SWEAAS JWT. */
+  publicCustomerCall: (data: { topic: string; project_id?: string }, projectToken: string) =>
+    axios.post(
+      `${import.meta.env.VITE_API_BASE_URL || "/api/v1"}/communication/customer-call/public`,
+      data,
+      { headers: { "Content-Type": "application/json", "X-Project-Token": projectToken } },
+    ),
   explainerVideo: (data: {
     project_id: string;
     topic: string;

@@ -30,7 +30,9 @@ class FeedbackService:
 
     def submit(self, request: FeedbackSubmitRequest) -> FeedbackItemResponse:
         """Record feedback and optionally POST to FEEDBACK_WEBHOOK_URL."""
-        fid = f"fb-{hashlib.sha256(f'{request.title}{datetime.now(timezone.utc).isoformat()}'.encode()).hexdigest()[:12]}"
+        raw = f"{request.title}{datetime.now(timezone.utc).isoformat()}"
+        digest = hashlib.sha256(raw.encode()).hexdigest()[:12]
+        fid = f"fb-{digest}"
         created = datetime.now(timezone.utc).isoformat()
         row = {
             "feedback_id": fid,
@@ -73,7 +75,9 @@ class FeedbackService:
             for r in items[:100]
         ]
 
-    def ingest_webhook(self, payload: FeedbackWebhookPayload, provider: str) -> FeedbackItemResponse:
+    def ingest_webhook(
+        self, payload: FeedbackWebhookPayload, provider: str
+    ) -> FeedbackItemResponse:
         """Normalize inbound webhooks from Intercom, Canny, Zendesk, etc."""
         title = payload.title or f"Inbound from {provider}"
         body = payload.body or "(no body)"

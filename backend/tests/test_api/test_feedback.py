@@ -1,6 +1,6 @@
 """Feedback API tests.
 
-With no ``SUPABASE_JWT_SECRET`` (default in tests), auth middleware runs in dev mode
+With ``AUTH_ENFORCE_JWT=false`` (default in tests), auth middleware runs in dev mode
 and accepts requests without a Bearer token.
 """
 

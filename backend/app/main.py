@@ -1,5 +1,8 @@
 """FastAPI entrypoint with Sentry integration and CORS middleware."""
 
+import logging
+from contextlib import asynccontextmanager
+
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,10 +11,13 @@ from app.api.middleware.auth_enforcement import AuthEnforcementMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
-if settings.auth_enforce_jwt and not settings.supabase_jwt_secret.strip():
-    raise RuntimeError("AUTH_ENFORCE_JWT=true requires a non-empty SUPABASE_JWT_SECRET")
+if settings.auth_enforce_jwt and not settings.supabase_url.strip():
+    raise RuntimeError(
+        "AUTH_ENFORCE_JWT=true requires SUPABASE_URL (JWKS verification)"
+    )
 
 # ── Sentry ───────────────────────────────────────────────────────
 if settings.sentry_dsn:
@@ -23,6 +29,17 @@ if settings.sentry_dsn:
 
 _expose_docs = not settings.auth_enforce_jwt
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    from app.core.llm_budget import budget_tracker
+    from app.services.seed_data import AGENTS
+
+    budget_tracker.init_budgets(AGENTS)
+    logger.info("Budget tracker ready — %d agents loaded", len(AGENTS))
+    yield
+
+
 # ── App ──────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.app_name,
@@ -31,9 +48,9 @@ app = FastAPI(
     docs_url="/docs" if _expose_docs else None,
     redoc_url="/redoc" if _expose_docs else None,
     openapi_url="/openapi.json" if _expose_docs else None,
+    lifespan=lifespan,
 )
 
-# Auth runs after CORS (CORS is added last → runs first on incoming requests).
 app.add_middleware(AuthEnforcementMiddleware)
 app.add_middleware(
     CORSMiddleware,

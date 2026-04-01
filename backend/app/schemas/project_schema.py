@@ -18,6 +18,9 @@ class ProjectResponse(BaseModel):
     slug: str
     description: str
     github_repo_url: str | None
+    sentry_project_slug: str | None = None
+    sentry_dsn: str | None = None
+    public_token: str | None = None
     status: str
     created_at: str
 

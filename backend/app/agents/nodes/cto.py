@@ -7,8 +7,6 @@ department-level subtasks, and routes them to the appropriate manager nodes.
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
 from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -27,7 +25,11 @@ Respond with a JSON object containing:
 {
   "analysis": "Brief analysis of the task",
   "subtasks": [
-    {"department": "engineering|product|marketing", "description": "What to do", "priority": "high|medium|low"}
+    {
+      "department": "engineering|product|marketing",
+      "description": "What to do",
+      "priority": "high|medium|low"
+    }
   ],
   "status": "delegated"
 }"""
@@ -39,21 +41,17 @@ async def cto_node(state: AgentState) -> dict:
     logger.info("CTO processing task: %s", task[:80])
 
     try:
-        from app.core.config import get_settings
+        from app.core.llm import llm_completion, llm_has_credentials
 
-        settings = get_settings()
-        if settings.openai_api_key or settings.anthropic_api_key:
-            import litellm
-
-            response = litellm.completion(
-                model="gpt-4o-mini",
+        if llm_has_credentials():
+            result = await llm_completion(
                 messages=[
                     {"role": "system", "content": CTO_SYSTEM_PROMPT},
                     {"role": "user", "content": f"Task: {task}"},
                 ],
-                api_key=settings.openai_api_key or None,
+                agent_id="cto-01",
             )
-            content = response.choices[0].message.content
+            content = result.content
             try:
                 parsed = json.loads(content)
                 return {
@@ -64,7 +62,9 @@ async def cto_node(state: AgentState) -> dict:
                 }
             except json.JSONDecodeError:
                 return {
-                    "subtasks": [{"department": "engineering", "description": task, "priority": "medium"}],
+                    "subtasks": [
+                        {"department": "engineering", "description": task, "priority": "medium"}
+                    ],
                     "status": "delegated",
                     "current_agent": "cto",
                     "messages": [{"role": "cto", "content": content}],
@@ -72,7 +72,6 @@ async def cto_node(state: AgentState) -> dict:
     except Exception as exc:
         logger.warning("LLM unavailable, using rule-based decomposition: %s", exc)
 
-    # Fallback: rule-based task decomposition
     subtasks = _rule_based_decompose(task)
     return {
         "subtasks": subtasks,
@@ -87,7 +86,9 @@ def _rule_based_decompose(task: str) -> list[dict]:
     task_lower = task.lower()
     subtasks = []
 
-    engineering_keywords = ["code", "bug", "fix", "implement", "api", "test", "deploy", "build", "refactor"]
+    engineering_keywords = [
+        "code", "bug", "fix", "implement", "api", "test", "deploy", "build", "refactor"
+    ]
     product_keywords = ["feature", "roadmap", "user", "research", "prioritize", "product"]
     marketing_keywords = ["campaign", "growth", "marketing", "analytics", "content"]
 
