@@ -1,5 +1,10 @@
 # Deploy backend to AWS ECS on push to main (backend paths).
 # Frontend is deployed automatically via AWS Amplify Hosting (GitHub integration).
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+# IAM user/role needs ECR push + ecs:UpdateService on cluster sweaas / service backend.
 
 name: Deploy Backend to AWS
 

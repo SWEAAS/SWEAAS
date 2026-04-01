@@ -181,6 +181,15 @@ All production infrastructure runs on **AWS** (account `802528391167`, `us-east-
 - Update ECS: `aws ecs update-service --cluster sweaas --service backend --force-new-deployment`
 - CI/CD: Push to `main` (backend paths) triggers [`.github/workflows/deploy-aws.yml`](.github/workflows/deploy-aws.yml)
 
+**GitHub Actions will fail immediately** if AWS credentials are missing. In the GitHub repo, add **Actions** secrets:
+
+| Secret | Value |
+|--------|--------|
+| `AWS_ACCESS_KEY_ID` | Access key for an IAM user (or use OIDC later) |
+| `AWS_SECRET_ACCESS_KEY` | Matching secret key |
+
+That user needs permission to log in to ECR, push to repository `sweaas-backend`, and run `ecs:UpdateService` on cluster `sweaas`, service `backend` (e.g. attach AWS managed policies `AmazonEC2ContainerRegistryPowerUser` plus a small inline policy for ECS update, or a custom policy that covers those APIs).
+
 ### Infrastructure changes
 
 ```bash
