@@ -29,6 +29,17 @@ class CalendarInviteResponse(BaseModel):
     status: str
 
 
+class TavusReplica(BaseModel):
+    replica_id: str
+    replica_name: str
+    thumbnail_video_url: str
+    model_name: str
+
+
+class TavusReplicaListResponse(BaseModel):
+    replicas: list[TavusReplica]
+
+
 class CTOCallRequest(BaseModel):
     project_id: str | None = None
     topic: str = Field(
@@ -36,6 +47,7 @@ class CTOCallRequest(BaseModel):
         min_length=2,
         max_length=500,
     )
+    replica_id: str | None = Field(default=None, description="Override the default CTO replica")
 
 
 class CTOCallResponse(BaseModel):

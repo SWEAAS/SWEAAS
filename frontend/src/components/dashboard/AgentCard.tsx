@@ -3,12 +3,12 @@ import type { Agent } from "../../store/agentStore";
 const statusConfig: Record<string, { dot: string; label: string; bg: string; text: string }> = {
   active:  { dot: "#059669", label: "Active",  bg: "#ECFDF5", text: "#059669" },
   warning: { dot: "#D97706", label: "Warning", bg: "#FFFBEB", text: "#D97706" },
-  paused:  { dot: "#8A96B0", label: "Paused",  bg: "#F5F8FE", text: "#8A96B0" },
+  paused:  { dot: "#7a7390", label: "Paused",  bg: "#f8f6fc", text: "#7a7390" },
   strike:  { dot: "#DC2626", label: "Strike",  bg: "#FEF2F2", text: "#DC2626" },
 };
 
 const deptColor: Record<string, string> = {
-  engineering: "#1B47D6",
+  engineering: "var(--brand)",
   marketing:   "#D97706",
   product:     "#7C3AED",
   support:     "#059669",
@@ -22,86 +22,51 @@ interface AgentCardProps {
 export default function AgentCard({ agent, onClick }: AgentCardProps) {
   const status = statusConfig[agent.status] ?? statusConfig.active;
   const pct = Math.round((agent.tokens_used_today / agent.daily_token_budget) * 100);
-  const accent = deptColor[agent.department] ?? "#1B47D6";
-
-  const barColor =
-    pct >= 85 ? "#DC2626" :
-    pct >= 60 ? "#D97706" :
-    "#1B47D6";
+  const accent = deptColor[agent.department] ?? "var(--brand)";
 
   return (
     <div
       onClick={onClick}
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #E2E8F4",
-        borderRadius: 14,
-        padding: "18px 20px",
-        cursor: onClick ? "pointer" : "default",
-        transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
-        boxShadow: "var(--shadow-sm)",
-      }}
+      className="rounded-[22px] border border-[#ece7f5] bg-white p-5 shadow-[0_12px_32px_-24px_rgba(42,26,92,0.28)] transition-all duration-200"
+      style={{ cursor: onClick ? "pointer" : "default" }}
       onMouseEnter={(e) => {
         const el = e.currentTarget as HTMLDivElement;
-        el.style.boxShadow = "var(--shadow-md)";
-        el.style.borderColor = "#C3D0F8";
+        el.style.boxShadow = "0_20px_44px_-28px_rgba(42,26,92,0.38)";
+        el.style.borderColor = "var(--brand-border)";
         if (onClick) el.style.transform = "translateY(-1px)";
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget as HTMLDivElement;
-        el.style.boxShadow = "var(--shadow-sm)";
-        el.style.borderColor = "#E2E8F4";
+        el.style.boxShadow = "";
+        el.style.borderColor = "#ece7f5";
         el.style.transform = "translateY(0)";
       }}
     >
       {/* Top row */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 14, fontWeight: 700, color: "#0C1526", margin: 0, letterSpacing: "-0.01em" }}>
+      <div className="mb-3.5 flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-bold text-[#1f1638] m-0 tracking-[-0.01em]">
             {agent.name}
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+          <div className="flex items-center gap-1.5 mt-1">
             <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: accent,
-                background: `${accent}12`,
-                padding: "2px 7px",
-                borderRadius: 20,
-                textTransform: "capitalize",
-              }}
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize"
+              style={{ color: accent, background: `color-mix(in srgb, ${accent} 10%, white)` }}
             >
               {agent.department}
             </span>
-            <span style={{ fontSize: 11, color: "#8A96B0" }}>
+            <span className="text-[11px] text-[#7a7390]">
               {agent.role.replace(/_/g, " ")}
             </span>
           </div>
         </div>
 
-        {/* Status pill */}
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            padding: "4px 9px",
-            background: status.bg,
-            borderRadius: 20,
-            flexShrink: 0,
-            marginLeft: 10,
-          }}
+          className="flex items-center gap-1.5 shrink-0 ml-2.5 rounded-full px-2.5 py-1"
+          style={{ background: status.bg }}
         >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: status.dot,
-            }}
-          />
-          <span style={{ fontSize: 11, fontWeight: 600, color: status.text }}>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: status.dot }} />
+          <span className="text-[11px] font-semibold" style={{ color: status.text }}>
             {status.label}
           </span>
         </div>
@@ -109,47 +74,28 @@ export default function AgentCard({ agent, onClick }: AgentCardProps) {
 
       {/* Token usage */}
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-          <span style={{ fontSize: 11, color: "#8A96B0", fontWeight: 500 }}>Token usage</span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: pct >= 85 ? "#DC2626" : "#0C1526",
-            }}
-          >
+        <div className="flex justify-between mb-1.5">
+          <span className="text-[11px] text-[#7a7390] font-medium">Token usage</span>
+          <span className={`text-[11px] font-bold ${pct >= 85 ? "text-red-600" : "text-[#1f1638]"}`}>
             {pct}%
           </span>
         </div>
-        <div
-          style={{
-            height: 5,
-            background: "#EEF2FB",
-            borderRadius: 10,
-            overflow: "hidden",
-          }}
-        >
+        <div className="h-1.5 overflow-hidden rounded-full bg-[#ece7f5]">
           <div
+            className="h-full rounded-full transition-[width] duration-500"
             style={{
-              height: "100%",
               width: `${Math.min(pct, 100)}%`,
               background: pct >= 85
-                ? "linear-gradient(90deg, #EF4444, #DC2626)"
+                ? "linear-gradient(90deg,#EF4444,#DC2626)"
                 : pct >= 60
-                ? "linear-gradient(90deg, #F59E0B, #D97706)"
-                : "linear-gradient(90deg, #3B82F6, #1B47D6)",
-              borderRadius: 10,
-              transition: "width 0.4s var(--ease-out)",
+                ? "linear-gradient(90deg,#F59E0B,#D97706)"
+                : "linear-gradient(90deg,var(--brand),var(--brand-dark))",
             }}
           />
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-          <span style={{ fontSize: 10, color: "#8A96B0" }}>
-            {(agent.tokens_used_today / 1000).toFixed(0)}K used
-          </span>
-          <span style={{ fontSize: 10, color: "#8A96B0" }}>
-            {(agent.daily_token_budget / 1000).toFixed(0)}K limit
-          </span>
+        <div className="flex justify-between mt-1.5">
+          <span className="text-[10px] text-[#7a7390]">{(agent.tokens_used_today / 1000).toFixed(0)}K used</span>
+          <span className="text-[10px] text-[#7a7390]">{(agent.daily_token_budget / 1000).toFixed(0)}K limit</span>
         </div>
       </div>
     </div>

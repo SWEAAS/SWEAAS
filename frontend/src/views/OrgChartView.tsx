@@ -2,10 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   ChevronRight,
+  MessageSquare,
+  Phone,
   ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import AgentChatPanel from "../three/ui/AgentChatPanel";
 import { useAgentStore, type Agent } from "../store/agentStore";
 
 const departmentStyles: Record<
@@ -196,6 +200,8 @@ function AgentTile({
 export default function OrgChartView() {
   const { agents, fetchAgents } = useAgentStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     void fetchAgents();
@@ -303,6 +309,34 @@ export default function OrgChartView() {
                     />
                   </div>
                 </div>
+
+                {/* Action buttons */}
+                <div className="mt-5 flex gap-2">
+                  <button
+                    onClick={() => setChatAgent(selectedAgent)}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#ddd3ff] bg-[#f6f3fb] px-3 py-2.5 text-xs font-semibold text-[#5b35d5] transition-colors hover:bg-[#ede8ff]"
+                  >
+                    <MessageSquare size={13} />
+                    Chat
+                  </button>
+                  {selectedAgent.hierarchy_level === "cto" ? (
+                    <button
+                      onClick={() => navigate("/cto-call")}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#c3d0f8] bg-[#ebf0ff] px-3 py-2.5 text-xs font-semibold text-[#1b47d6] transition-colors hover:bg-[#dce5ff]"
+                    >
+                      <Phone size={13} />
+                      Video Call
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate("/hq")}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[#c3d0f8] bg-[#ebf0ff] px-3 py-2.5 text-xs font-semibold text-[#1b47d6] transition-colors hover:bg-[#dce5ff]"
+                    >
+                      <Building2 size={13} />
+                      Visit HQ
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <p className="text-sm text-[#675f7e]">Select an agent to inspect their role.</p>
@@ -390,6 +424,10 @@ export default function OrgChartView() {
           </div>
         )}
       </section>
+
+      {chatAgent && (
+        <AgentChatPanel agent={chatAgent} onClose={() => setChatAgent(null)} />
+      )}
     </div>
   );
 }

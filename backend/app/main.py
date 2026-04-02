@@ -30,6 +30,43 @@ if settings.sentry_dsn:
 _expose_docs = not settings.auth_enforce_jwt
 
 
+async def _ensure_dev_user() -> None:
+    """In dev mode (AUTH_ENFORCE_JWT=false), guarantee a dev org + user row exist
+    so that project endpoints don't 400 with 'not associated with an organization'."""
+    if settings.auth_enforce_jwt:
+        return
+    import uuid
+    from sqlalchemy import select
+    from app.core.database import async_session_factory
+    from app.models.user import Organization, User
+
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(User).where(User.supabase_uid == "dev-user")
+            )
+            if result.scalar_one_or_none() is not None:
+                return
+
+            org = Organization(name="SWEAAS Dev", slug="sweaas-dev")
+            session.add(org)
+            await session.flush()
+
+            user = User(
+                id=uuid.uuid4(),
+                supabase_uid="dev-user",
+                email="dev@sweaas.dev",
+                full_name="Dev User",
+                organization_id=org.id,
+                role="owner",
+            )
+            session.add(user)
+            await session.commit()
+            logger.info("Dev org + user seeded (id=%s)", user.id)
+    except Exception:
+        logger.warning("Could not seed dev user — DB may not be ready yet", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from app.core.llm_budget import budget_tracker
@@ -37,6 +74,7 @@ async def lifespan(_app: FastAPI):
 
     budget_tracker.init_budgets(AGENTS)
     logger.info("Budget tracker ready — %d agents loaded", len(AGENTS))
+    await _ensure_dev_user()
     yield
 
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 import { agentApi } from "../../api/client";
 import type { Agent } from "../../store/agentStore";
@@ -17,32 +17,40 @@ export default function AgentChatPanel({ agent, onClose }: AgentChatPanelProps) 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "agent",
-      content: `Hi! I'm ${agent.name}. I'm currently working as ${agent.role.replace(/_/g, " ")}. How can I help you?`,
+      content: `Hi, I'm ${agent.name}. ${agent.current_focus ? `I'm currently focused on: ${agent.current_focus}` : `I work as ${agent.role.replace(/_/g, " ")}.`} What can I help you with?`,
     },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
     const userMsg = input.trim();
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: userMsg }]);
+
+    const newMessages: ChatMessage[] = [...messages, { role: "user", content: userMsg }];
+    setMessages(newMessages);
     setSending(true);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+    // Build history from prior turns (skip the greeting)
+    const history = newMessages.slice(1, -1).map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.content,
+    }));
 
     try {
-      const res = await agentApi.chat(agent.agent_id, userMsg);
-      setMessages((m) => [
-        ...m,
-        { role: "agent", content: res.data.response },
-      ]);
+      const res = await agentApi.chat(agent.agent_id, userMsg, history);
+      setMessages((m) => [...m, { role: "agent", content: res.data.response }]);
     } catch {
       setMessages((m) => [
         ...m,
-        { role: "agent", content: "Sorry, I couldn't process that request." },
+        { role: "agent", content: "Sorry, I couldn't process that right now. Try again in a moment." },
       ]);
     }
     setSending(false);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   return (
@@ -71,7 +79,7 @@ export default function AgentChatPanel({ agent, onClose }: AgentChatPanelProps) 
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+              className={`max-w-[80%] px-3 py-2 rounded-xl text-sm leading-relaxed ${
                 msg.role === "user"
                   ? "bg-sweaas-blue text-white rounded-br-none"
                   : "bg-gray-100 text-sweaas-text rounded-bl-none"
@@ -81,6 +89,18 @@ export default function AgentChatPanel({ agent, onClose }: AgentChatPanelProps) 
             </div>
           </div>
         ))}
+        {sending && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 rounded-xl rounded-bl-none px-3 py-2">
+              <span className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              </span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input */}

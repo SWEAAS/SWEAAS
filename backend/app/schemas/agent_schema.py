@@ -34,8 +34,14 @@ class AgentDetail(AgentSummary):
     recent_activity: list[AgentActivity]
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class AgentChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=5000)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=40)
 
 
 class AgentChatResponse(BaseModel):

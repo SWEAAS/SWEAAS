@@ -12,9 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_github_service, get_greptile_service, get_sentry_service
-from app.models.project import Project
+from app.models.project import Project, ProjectConfig
 from app.models.user import User
-from app.schemas.project_schema import ProjectCreateRequest, ProjectResponse
+from app.schemas.project_schema import (
+    ProjectConfigPatchRequest,
+    ProjectConfigResponse,
+    ProjectCreateRequest,
+    ProjectResponse,
+)
 from app.services.github_service import GitHubService
 from app.services.greptile_service import GreptileService
 from app.services.sentry_service import SentryService
@@ -145,6 +150,70 @@ async def list_projects(
         )
         for p in projects
     ]
+
+
+@router.patch("/{project_id}/config", response_model=ProjectConfigResponse)
+async def patch_project_config(
+    project_id: str,
+    request: ProjectConfigPatchRequest,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectConfigResponse:
+    """Create or update a project's configuration (budget, timeline, departments, agents).
+
+    Upserts a ``ProjectConfig`` row for the given project.  Callers may send a
+    partial object — only provided fields are applied.
+    """
+    org_id = await _resolve_org_id(user, db)
+    stmt = select(Project).where(
+        Project.id == project_id,
+        Project.organization_id == org_id,
+    )
+    result = await db.execute(stmt)
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    stmt_cfg = select(ProjectConfig).where(ProjectConfig.project_id == project.id)
+    result_cfg = await db.execute(stmt_cfg)
+    config = result_cfg.scalar_one_or_none()
+
+    if config is None:
+        config = ProjectConfig(project_id=project.id)
+        db.add(config)
+
+    if request.monthly_budget_usd is not None:
+        config.monthly_budget_usd = request.monthly_budget_usd
+    if request.timeline_weeks is not None:
+        config.timeline_weeks = request.timeline_weeks
+    if request.departments is not None:
+        config.departments = ",".join(request.departments)
+    if request.max_agents is not None:
+        config.max_agents = request.max_agents
+    if request.github_username is not None and request.github_username:
+        github_service: GitHubService = GitHubService()
+        try:
+            await github_service.add_collaborator(
+                project.github_repo_name or project.slug, request.github_username
+            )
+        except Exception:
+            logger.warning(
+                "Could not add GitHub collaborator %s to %s",
+                request.github_username,
+                project.slug,
+                exc_info=True,
+            )
+
+    await db.commit()
+    await db.refresh(config)
+
+    dept_list = [d.strip() for d in (config.departments or "engineering").split(",") if d.strip()]
+    return ProjectConfigResponse(
+        monthly_budget_usd=config.monthly_budget_usd,
+        timeline_weeks=config.timeline_weeks,
+        departments=dept_list,
+        max_agents=config.max_agents,
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

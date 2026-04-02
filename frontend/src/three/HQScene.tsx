@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Environment, Sky } from "@react-three/drei";
 import Building from "./Building";
@@ -73,7 +74,7 @@ export default function HQScene({ agents, onAgentClick }: HQSceneProps) {
   return (
     <Canvas
       camera={{ position: [15, 12, 15], fov: 50 }}
-      shadows
+      shadows={{ type: THREE.PCFShadowMap }}
       style={{ background: "#e8f0fe" }}
     >
       <Sky sunPosition={[100, 50, 100]} />

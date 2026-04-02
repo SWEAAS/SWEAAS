@@ -35,10 +35,10 @@ export default function Sidebar() {
         height: "100vh",
         width: 232,
         background: "#FFFFFF",
-        borderRight: "1px solid #E2E8F4",
+        borderRight: "1px solid #ece7f5",
         display: "flex",
         flexDirection: "column",
-        boxShadow: "1px 0 0 #E2E8F4",
+        boxShadow: "1px 0 0 #ece7f5",
       }}
     >
       {/* Logo */}
@@ -49,46 +49,30 @@ export default function Sidebar() {
               width: 32,
               height: 32,
               borderRadius: 9,
-              background: "linear-gradient(135deg, #1B47D6, #3B82F6)",
+              background: "linear-gradient(135deg, var(--brand-dark), var(--brand))",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(27,71,214,0.3)",
+              boxShadow: "var(--shadow-brand)",
               flexShrink: 0,
             }}
           >
-            <span
-              style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}
-            >
+            <span style={{ fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
               S
             </span>
           </div>
           <div>
-            <p
-              style={{
-                fontSize: 15,
-                fontWeight: 800,
-                color: "#0C1526",
-                margin: 0,
-                letterSpacing: "-0.03em",
-              }}
-            >
+            <p style={{ fontSize: 15, fontWeight: 800, color: "#1f1638", margin: 0, letterSpacing: "-0.03em" }}>
               SWEAAS
             </p>
-            <p style={{ fontSize: 10, color: "#8A96B0", margin: 0, fontWeight: 500 }}>
+            <p style={{ fontSize: 10, color: "#7a7390", margin: 0, fontWeight: 500 }}>
               SWE as a Service
             </p>
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          height: 1,
-          background: "#E2E8F4",
-          margin: "0 16px 8px",
-        }}
-      />
+      <div style={{ height: 1, background: "#ece7f5", margin: "0 16px 8px" }} />
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "4px 8px", overflowY: "auto" }}>
@@ -101,43 +85,37 @@ export default function Sidebar() {
               alignItems: "center",
               gap: 10,
               padding: "9px 14px",
-              borderRadius: 8,
+              borderRadius: 10,
               marginBottom: 2,
               fontSize: 13.5,
               fontWeight: isActive ? 600 : 500,
-              color: isActive ? "#1B47D6" : "#4D5E80",
-              background: isActive ? "#EBF0FF" : "transparent",
+              color: isActive ? "var(--brand)" : "#675f7e",
+              background: isActive ? "var(--brand-chip)" : "transparent",
               textDecoration: "none",
               transition: "background 0.15s ease, color 0.15s ease",
             })}
             onMouseEnter={(e) => {
               const el = e.currentTarget;
               if (!el.getAttribute("aria-current")) {
-                el.style.background = "#F0F4FF";
-                el.style.color = "#1B47D6";
+                el.style.background = "var(--brand-surface)";
+                el.style.color = "var(--brand)";
               }
             }}
             onMouseLeave={(e) => {
               const el = e.currentTarget;
               if (!el.getAttribute("aria-current")) {
                 el.style.background = "transparent";
-                el.style.color = "#4D5E80";
+                el.style.color = "#675f7e";
               }
             }}
           >
-            <Icon size={16} strokeWidth={isActive => isActive ? 2.2 : 1.8} />
+            <Icon size={16} strokeWidth={1.8} />
             {label}
           </NavLink>
         ))}
       </nav>
 
-      <div
-        style={{
-          height: 1,
-          background: "#E2E8F4",
-          margin: "0 16px 8px",
-        }}
-      />
+      <div style={{ height: 1, background: "#ece7f5", margin: "0 16px 8px" }} />
 
       {/* Logout */}
       <div style={{ padding: "8px 8px 16px" }}>
@@ -148,23 +126,23 @@ export default function Sidebar() {
             alignItems: "center",
             gap: 10,
             padding: "9px 14px",
-            borderRadius: 8,
+            borderRadius: 10,
             width: "100%",
             fontSize: 13.5,
             fontWeight: 500,
-            color: "#8A96B0",
+            color: "#7a7390",
             background: "transparent",
             border: "none",
             cursor: "pointer",
             transition: "background 0.15s ease, color 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#FEF2F2";
-            (e.currentTarget as HTMLButtonElement).style.color = "#DC2626";
+            (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2";
+            (e.currentTarget as HTMLButtonElement).style.color = "#dc2626";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-            (e.currentTarget as HTMLButtonElement).style.color = "#8A96B0";
+            (e.currentTarget as HTMLButtonElement).style.color = "#7a7390";
           }}
         >
           <LogOut size={16} />

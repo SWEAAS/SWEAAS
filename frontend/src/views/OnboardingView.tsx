@@ -6,9 +6,13 @@ import {
   GitBranch,
   CreditCard,
   CheckCircle,
+  Sparkles,
 } from "lucide-react";
 
 type Step = "company" | "github" | "budget" | "departments" | "review";
+
+const inputClass =
+  "w-full rounded-[12px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3 text-[14px] text-[#1f1638] font-[inherit] outline-none transition-colors focus:border-[var(--brand-border)] focus:bg-white";
 
 export default function OnboardingView() {
   const [step, setStep] = useState<Step>("company");
@@ -22,11 +26,11 @@ export default function OnboardingView() {
   });
 
   const steps: { key: Step; label: string; icon: typeof Building2 }[] = [
-    { key: "company", label: "Company", icon: Building2 },
-    { key: "github", label: "GitHub", icon: GitBranch },
-    { key: "budget", label: "Budget", icon: CreditCard },
-    { key: "departments", label: "Team", icon: Building2 },
-    { key: "review", label: "Review", icon: CheckCircle },
+    { key: "company",     label: "Company",  icon: Building2 },
+    { key: "github",      label: "GitHub",   icon: GitBranch },
+    { key: "budget",      label: "Budget",   icon: CreditCard },
+    { key: "departments", label: "Team",     icon: Building2 },
+    { key: "review",      label: "Review",   icon: CheckCircle },
   ];
 
   const currentIdx = steps.findIndex((s) => s.key === step);
@@ -41,36 +45,47 @@ export default function OnboardingView() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto py-12">
-      <h2 className="text-3xl font-bold text-sweaas-text text-center mb-2">
-        Welcome to SWEAAS
-      </h2>
-      <p className="text-sweaas-text-secondary text-center mb-10">
-        Set up your AI-powered engineering team in minutes
-      </p>
+    <div className="mx-auto max-w-2xl py-12 space-y-6">
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] px-8 py-7 text-center shadow-[0_24px_70px_-50px_rgba(42,26,92,0.3)]">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-white/75 px-3 py-1 text-xs font-medium text-[var(--brand)] backdrop-blur">
+          <Sparkles size={12} />
+          Getting started
+        </div>
+        <h2 className="text-3xl font-semibold tracking-tight text-[#1f1638]">Welcome to SWEAAS</h2>
+        <p className="mt-2 text-sm text-[#675f7e]">Set up your AI-powered engineering team in minutes</p>
+      </section>
 
-      {/* Progress Steps */}
-      <div className="flex items-center justify-center gap-2 mb-12">
+      {/* ── Progress steps ────────────────────────────────────── */}
+      <div className="flex items-center justify-center gap-2">
         {steps.map((s, i) => {
           const Icon = s.icon;
           const isActive = i === currentIdx;
           const isDone = i < currentIdx;
           return (
             <div key={s.key} className="flex items-center gap-2">
-              <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-sweaas-blue text-white"
-                    : isDone
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-100 text-sweaas-text-secondary"
-                }`}
-              >
-                {isDone ? <CheckCircle size={18} /> : <Icon size={18} />}
+              <div className="flex flex-col items-center gap-1">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all"
+                  style={{
+                    background: isActive ? "var(--brand)" : isDone ? "#059669" : "#f8f6fc",
+                    color: isActive || isDone ? "#fff" : "#7a7390",
+                    boxShadow: isActive ? "var(--shadow-brand)" : "none",
+                  }}
+                >
+                  {isDone ? <CheckCircle size={16} /> : <Icon size={16} />}
+                </div>
+                <span
+                  className="text-[10px] font-medium uppercase tracking-[0.1em]"
+                  style={{ color: isActive ? "var(--brand)" : isDone ? "#059669" : "#7a7390" }}
+                >
+                  {s.label}
+                </span>
               </div>
               {i < steps.length - 1 && (
                 <div
-                  className={`w-12 h-0.5 ${isDone ? "bg-green-500" : "bg-gray-200"}`}
+                  className="mb-5 h-0.5 w-10 transition-colors"
+                  style={{ background: isDone ? "#059669" : "#ece7f5" }}
                 />
               )}
             </div>
@@ -78,158 +93,110 @@ export default function OnboardingView() {
         })}
       </div>
 
-      {/* Step Content */}
-      <div className="bg-white rounded-2xl border border-sweaas-border p-8">
+      {/* ── Step content ──────────────────────────────────────── */}
+      <section className="rounded-[28px] border border-[#ece7f5] bg-white p-8 shadow-[0_16px_42px_-34px_rgba(42,26,92,0.25)]">
         {step === "company" && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">Company Information</h3>
+          <div className="space-y-5">
+            <h3 className="text-[17px] font-semibold text-[#1f1638]">Company Information</h3>
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Company Name
-              </label>
-              <input
-                type="text"
-                value={form.company_name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, company_name: e.target.value }))
-                }
-                placeholder="Acme Inc."
-                className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-              />
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Company Name</label>
+              <input type="text" value={form.company_name} onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))} placeholder="Acme Inc." className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Contact Email
-              </label>
-              <input
-                type="email"
-                value={form.contact_email}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, contact_email: e.target.value }))
-                }
-                placeholder="you@company.com"
-                className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-              />
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Contact Email</label>
+              <input type="email" value={form.contact_email} onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))} placeholder="you@company.com" className={inputClass} />
             </div>
           </div>
         )}
 
         {step === "github" && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">GitHub Access</h3>
-            <p className="text-sm text-sweaas-text-secondary">
-              We'll create a repository for your project and optionally give you
-              collaborator access.
+          <div className="space-y-5">
+            <h3 className="text-[17px] font-semibold text-[#1f1638]">GitHub Access</h3>
+            <p className="text-[13px] text-[#675f7e]">
+              We'll create a repository for your project and optionally give you collaborator access.
             </p>
             <div>
-              <label className="block text-sm font-medium mb-2">
-                GitHub Username (optional)
-              </label>
-              <input
-                type="text"
-                value={form.github_username}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, github_username: e.target.value }))
-                }
-                placeholder="your-github-handle"
-                className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-              />
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">GitHub Username (optional)</label>
+              <input type="text" value={form.github_username} onChange={(e) => setForm((f) => ({ ...f, github_username: e.target.value }))} placeholder="your-github-handle" className={inputClass} />
             </div>
           </div>
         )}
 
         {step === "budget" && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">Budget & Timeline</h3>
+          <div className="space-y-5">
+            <h3 className="text-[17px] font-semibold text-[#1f1638]">Budget & Timeline</h3>
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Monthly Budget (USD)
-              </label>
-              <input
-                type="number"
-                value={form.monthly_budget_usd}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    monthly_budget_usd: Number(e.target.value),
-                  }))
-                }
-                className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-              />
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Monthly Budget (USD)</label>
+              <input type="number" value={form.monthly_budget_usd} onChange={(e) => setForm((f) => ({ ...f, monthly_budget_usd: Number(e.target.value) }))} className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Timeline (weeks)
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
+                Timeline — {form.timeline_weeks} weeks
               </label>
               <input
-                type="range"
-                min={1}
-                max={52}
-                value={form.timeline_weeks}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    timeline_weeks: Number(e.target.value),
-                  }))
-                }
-                className="w-full accent-sweaas-blue"
+                type="range" min={1} max={52} value={form.timeline_weeks}
+                onChange={(e) => setForm((f) => ({ ...f, timeline_weeks: Number(e.target.value) }))}
+                className="w-full"
+                style={{ accentColor: "var(--brand)" }}
               />
-              <p className="text-sm text-sweaas-text-secondary mt-1">
-                {form.timeline_weeks} weeks
-              </p>
+              <div className="flex justify-between mt-1 text-[10px] text-[#7a7390]">
+                <span>1 week</span><span>52 weeks</span>
+              </div>
             </div>
           </div>
         )}
 
         {step === "departments" && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">Select Departments</h3>
-            <p className="text-sm text-sweaas-text-secondary">
-              Choose which departments your AI team should cover.
-            </p>
-            <div className="grid grid-cols-3 gap-4">
-              {["engineering", "marketing", "product"].map((dept) => (
-                <button
-                  key={dept}
-                  onClick={() => toggleDept(dept)}
-                  className={`p-4 rounded-xl border-2 transition-colors text-sm font-medium capitalize ${
-                    form.departments.includes(dept)
-                      ? "border-sweaas-blue bg-sweaas-blue/5 text-sweaas-blue"
-                      : "border-sweaas-border text-sweaas-text-secondary hover:border-sweaas-blue-light"
-                  }`}
-                >
-                  {dept}
-                </button>
-              ))}
+          <div className="space-y-5">
+            <h3 className="text-[17px] font-semibold text-[#1f1638]">Select Departments</h3>
+            <p className="text-[13px] text-[#675f7e]">Choose which departments your AI team should cover.</p>
+            <div className="grid grid-cols-3 gap-3">
+              {["engineering", "marketing", "product"].map((dept) => {
+                const active = form.departments.includes(dept);
+                return (
+                  <button
+                    key={dept}
+                    onClick={() => toggleDept(dept)}
+                    className="rounded-[16px] border p-4 text-[13px] font-medium capitalize transition-all"
+                    style={{
+                      background: active ? "var(--brand-chip)" : "#f8f6fc",
+                      color: active ? "var(--brand)" : "#7a7390",
+                      borderColor: active ? "var(--brand-border)" : "#ece7f5",
+                      borderWidth: active ? 2 : 1,
+                    }}
+                  >
+                    {dept}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
         {step === "review" && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Review & Launch</h3>
-            <div className="space-y-2 text-sm">
-              <p>
-                <strong>Company:</strong> {form.company_name}
-              </p>
-              <p>
-                <strong>Email:</strong> {form.contact_email}
-              </p>
-              <p>
-                <strong>GitHub:</strong>{" "}
-                {form.github_username || "Not provided"}
-              </p>
-              <p>
-                <strong>Budget:</strong> ${form.monthly_budget_usd}/month
-              </p>
-              <p>
-                <strong>Timeline:</strong> {form.timeline_weeks} weeks
-              </p>
-              <p>
-                <strong>Departments:</strong> {form.departments.join(", ")}
-              </p>
+          <div className="space-y-5">
+            <h3 className="text-[17px] font-semibold text-[#1f1638]">Review & Launch</h3>
+            <div className="rounded-[16px] border border-[#ece7f5] bg-[#f8f6fc] p-5 space-y-2.5 text-[13px]">
+              {[
+                ["Company",     form.company_name],
+                ["Email",       form.contact_email],
+                ["GitHub",      form.github_username || "Not provided"],
+                ["Budget",      `$${form.monthly_budget_usd}/month`],
+                ["Timeline",    `${form.timeline_weeks} weeks`],
+                ["Departments", form.departments.join(", ")],
+              ].map(([label, value]) => (
+                <div key={label} className="flex gap-2">
+                  <span className="font-semibold text-[#675f7e] w-24 shrink-0">{label}</span>
+                  <span className="text-[#1f1638]">{value}</span>
+                </div>
+              ))}
             </div>
-            <button className="w-full py-3 bg-sweaas-blue text-white rounded-lg font-medium hover:bg-sweaas-blue-dark transition-colors mt-6">
+            <button
+              className="mt-2 w-full rounded-[12px] py-3 text-[14px] font-bold text-white transition-opacity"
+              style={{ background: "var(--brand)" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
+            >
               Launch My AI Team
             </button>
           </div>
@@ -237,23 +204,26 @@ export default function OnboardingView() {
 
         {/* Navigation */}
         {step !== "review" && (
-          <div className="flex justify-between mt-8">
+          <div className="mt-8 flex justify-between">
             <button
               onClick={() => setStep(steps[currentIdx - 1]?.key ?? "company")}
               disabled={currentIdx === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-sweaas-text-secondary hover:text-sweaas-text disabled:opacity-30"
+              className="flex items-center gap-2 rounded-[10px] px-4 py-2 text-[13px] font-medium text-[#7a7390] transition-colors hover:text-[#1f1638] disabled:opacity-30"
             >
-              <ArrowLeft size={16} /> Back
+              <ArrowLeft size={15} /> Back
             </button>
             <button
               onClick={() => setStep(steps[currentIdx + 1]?.key ?? "review")}
-              className="flex items-center gap-2 px-6 py-2 bg-sweaas-blue text-white text-sm rounded-lg hover:bg-sweaas-blue-dark transition-colors"
+              className="flex items-center gap-2 rounded-[12px] px-6 py-2.5 text-[13px] font-bold text-white transition-opacity"
+              style={{ background: "var(--brand)" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
             >
-              Next <ArrowRight size={16} />
+              Next <ArrowRight size={15} />
             </button>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

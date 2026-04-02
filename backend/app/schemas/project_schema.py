@@ -25,6 +25,14 @@ class ProjectResponse(BaseModel):
     created_at: str
 
 
+class ProjectConfigPatchRequest(BaseModel):
+    monthly_budget_usd: float | None = Field(default=None, gt=0)
+    timeline_weeks: int | None = Field(default=None, gt=0, le=52)
+    departments: list[str] | None = None
+    max_agents: int | None = Field(default=None, gt=0, le=100)
+    github_username: str | None = Field(default=None, max_length=100)
+
+
 class ProjectConfigResponse(BaseModel):
     monthly_budget_usd: float
     timeline_weeks: int

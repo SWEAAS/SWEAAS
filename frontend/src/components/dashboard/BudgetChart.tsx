@@ -9,23 +9,13 @@ import {
 } from "recharts";
 import { useBudgetStore } from "../../store/budgetStore";
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #E2E8F4",
-        borderRadius: 10,
-        padding: "10px 14px",
-        boxShadow: "var(--shadow-md)",
-        fontSize: 12,
-        color: "#0C1526",
-      }}
-    >
-      <p style={{ fontWeight: 700, marginBottom: 4 }}>{label}</p>
-      {payload.map((entry: any) => (
-        <p key={entry.name} style={{ color: entry.color, margin: "2px 0", fontWeight: 500 }}>
+    <div className="rounded-[10px] border border-[#ece7f5] bg-white px-3.5 py-2.5 shadow-md text-[12px] text-[#1f1638]">
+      <p className="font-bold mb-1">{label}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} className="m-0.5 font-medium" style={{ color: entry.color }}>
           {entry.name}: {entry.value}K
         </p>
       ))}
@@ -43,64 +33,46 @@ export default function BudgetChart() {
   }));
 
   return (
-    <div
-      style={{
-        background: "#FFFFFF",
-        borderRadius: 14,
-        border: "1px solid #E2E8F4",
-        padding: "20px 20px 12px",
-        boxShadow: "var(--shadow-sm)",
-      }}
-    >
-      <div style={{ marginBottom: 16 }}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: "#0C1526", margin: 0 }}>
-          Token Usage by Agent
-        </p>
-        <p style={{ fontSize: 12, color: "#8A96B0", margin: "3px 0 0" }}>
-          Daily consumption vs. budget (K tokens)
-        </p>
+    <div className="rounded-[22px] border border-[#ece7f5] bg-white p-5 shadow-[0_12px_32px_-24px_rgba(42,26,92,0.22)]">
+      <div className="mb-4">
+        <p className="text-[14px] font-bold text-[#1f1638] m-0">Token Usage by Agent</p>
+        <p className="text-[12px] text-[#7a7390] mt-0.5 m-0">Daily consumption vs. budget (K tokens)</p>
       </div>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+      <div className="mb-4 flex gap-4">
         {[
-          { color: "#1B47D6", label: "Used" },
-          { color: "#EEF2FB", label: "Budget", border: "#C3D0F8" },
+          { color: "var(--brand)", label: "Used" },
+          { color: "#ece7f5", label: "Budget", border: "var(--brand-border)" },
         ].map(({ color, label, border }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div key={label} className="flex items-center gap-1.5">
             <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 3,
-                background: color,
-                border: border ? `1px solid ${border}` : "none",
-                flexShrink: 0,
-              }}
+              className="w-2.5 h-2.5 rounded-[3px] shrink-0"
+              style={{ background: color, border: border ? `1px solid ${border}` : "none" }}
             />
-            <span style={{ fontSize: 11, color: "#4D5E80", fontWeight: 500 }}>{label}</span>
+            <span className="text-[11px] text-[#675f7e] font-medium">{label}</span>
           </div>
         ))}
       </div>
 
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 0, right: 4, left: -20, bottom: 0 }} barGap={3}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#EEF2FB" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#ece7f5" vertical={false} />
           <XAxis
             dataKey="name"
             fontSize={11}
-            tick={{ fill: "#8A96B0", fontFamily: "Plus Jakarta Sans" }}
+            tick={{ fill: "#7a7390", fontFamily: "Plus Jakarta Sans" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             fontSize={11}
-            tick={{ fill: "#8A96B0", fontFamily: "Plus Jakarta Sans" }}
+            tick={{ fill: "#7a7390", fontFamily: "Plus Jakarta Sans" }}
             axisLine={false}
             tickLine={false}
           />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F5F8FE" }} />
-          <Bar dataKey="used"   fill="#1B47D6" radius={[5,5,0,0]} />
-          <Bar dataKey="budget" fill="#EEF2FB" stroke="#C3D0F8" strokeWidth={1} radius={[5,5,0,0]} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: "var(--brand-surface)" }} />
+          <Bar dataKey="used"   fill="var(--brand)"        radius={[5,5,0,0]} />
+          <Bar dataKey="budget" fill="#ece7f5" stroke="var(--brand-border)" strokeWidth={1} radius={[5,5,0,0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -67,22 +67,32 @@ class ObservabilityService:
             return SentryIssueListResponse(issues=[])
 
         slug = project_slug or settings.sentry_project
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"https://sentry.io/api/0/projects/{settings.sentry_org}/{slug}/issues/",
-                headers={"Authorization": f"Bearer {settings.sentry_auth_token}"},
-                params={"query": "is:unresolved", "limit": 25},
-            )
-            resp.raise_for_status()
-            issues = [
-                SentryIssue(
-                    issue_id=i["id"],
-                    title=i["title"],
-                    level=i["level"],
-                    count=i["count"],
-                    first_seen=i["firstSeen"],
-                    last_seen=i["lastSeen"],
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"https://sentry.io/api/0/projects/{settings.sentry_org}/{slug}/issues/",
+                    headers={"Authorization": f"Bearer {settings.sentry_auth_token}"},
+                    params={"query": "is:unresolved", "limit": 25},
                 )
-                for i in resp.json()
-            ]
-            return SentryIssueListResponse(issues=issues)
+                if resp.status_code in (404, 403):
+                    logger.warning(
+                        "Sentry project '%s/%s' not found or inaccessible (HTTP %d) — returning empty",
+                        settings.sentry_org, slug, resp.status_code,
+                    )
+                    return SentryIssueListResponse(issues=[])
+                resp.raise_for_status()
+                issues = [
+                    SentryIssue(
+                        issue_id=i["id"],
+                        title=i["title"],
+                        level=i["level"],
+                        count=i["count"],
+                        first_seen=i["firstSeen"],
+                        last_seen=i["lastSeen"],
+                    )
+                    for i in resp.json()
+                ]
+                return SentryIssueListResponse(issues=issues)
+        except httpx.TransportError as exc:
+            logger.warning("Sentry request failed (transport error) — returning empty: %s", exc)
+            return SentryIssueListResponse(issues=[])

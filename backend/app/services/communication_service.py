@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 import httpx
+from fastapi import HTTPException
 
 from app.core.config import get_settings
 from app.schemas.communication_schema import (
@@ -138,7 +139,7 @@ class CommunicationService:
             )
 
         payload: dict[str, Any] = {
-            "replica_id": settings.tavus_replica_id,
+            "replica_id": request.replica_id or settings.tavus_replica_id,
             "persona_id": settings.tavus_persona_id,
             "conversation_name": f"CTO Call — {request.topic[:60]}",
             "custom_greeting": f"Hello! I'm the CTO. Let's discuss: {request.topic}",
@@ -155,6 +156,11 @@ class CommunicationService:
                 },
                 json=payload,
             )
+            if resp.status_code == 402:
+                raise HTTPException(
+                    status_code=402,
+                    detail="Tavus free tier limit reached. Upgrade your Tavus plan at tavus.io to start more conversations.",
+                )
             resp.raise_for_status()
             data = resp.json()
             return CTOCallResponse(
@@ -209,6 +215,11 @@ class CommunicationService:
                 },
                 json=payload,
             )
+            if resp.status_code == 402:
+                raise HTTPException(
+                    status_code=402,
+                    detail="Tavus free tier limit reached. Upgrade your Tavus plan at tavus.io to start more conversations.",
+                )
             resp.raise_for_status()
             data = resp.json()
             return CustomerCallResponse(

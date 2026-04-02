@@ -5,7 +5,7 @@ import { useProjectStore } from "../../store/projectStore";
 
 const statusDot: Record<string, string> = {
   active:   "#059669",
-  inactive: "#8A96B0",
+  inactive: "#7a7390",
   paused:   "#D97706",
 };
 
@@ -33,7 +33,7 @@ export default function Header() {
       style={{
         height: 60,
         background: "#FFFFFF",
-        borderBottom: "1px solid #E2E8F4",
+        borderBottom: "1px solid #ece7f5",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -52,9 +52,9 @@ export default function Header() {
             alignItems: "center",
             gap: 8,
             padding: "7px 12px",
-            background: open ? "#EBF0FF" : "#F5F8FE",
-            border: `1px solid ${open ? "#C3D0F8" : "#E2E8F4"}`,
-            borderRadius: 8,
+            background: open ? "var(--brand-chip)" : "var(--brand-surface)",
+            border: `1px solid ${open ? "var(--brand-border)" : "#ece7f5"}`,
+            borderRadius: 10,
             cursor: "pointer",
             transition: "all 0.15s ease",
           }}
@@ -66,19 +66,19 @@ export default function Header() {
                   width: 7,
                   height: 7,
                   borderRadius: "50%",
-                  background: statusDot[currentProject.status] ?? "#8A96B0",
+                  background: statusDot[currentProject.status] ?? "#7a7390",
                   flexShrink: 0,
                 }}
               />
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#0C1526" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#1f1638" }}>
                 {currentProject.name}
               </span>
               <span
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "#8A96B0",
-                  background: "#F0F4FF",
+                  color: "var(--brand)",
+                  background: "var(--brand-chip)",
                   padding: "1px 7px",
                   borderRadius: 20,
                   textTransform: "uppercase",
@@ -89,14 +89,14 @@ export default function Header() {
               </span>
             </>
           ) : (
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#8A96B0" }}>
+            <span style={{ fontSize: 13, fontWeight: 500, color: "#7a7390" }}>
               Select project
             </span>
           )}
           <ChevronDown
             size={13}
             style={{
-              color: "#8A96B0",
+              color: "#7a7390",
               transform: open ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 0.2s var(--ease-out)",
               marginLeft: 2,
@@ -112,8 +112,8 @@ export default function Header() {
               left: 0,
               minWidth: 260,
               background: "#FFFFFF",
-              border: "1px solid #E2E8F4",
-              borderRadius: 12,
+              border: "1px solid #ece7f5",
+              borderRadius: 14,
               boxShadow: "var(--shadow-lg)",
               padding: "6px",
               zIndex: 50,
@@ -121,7 +121,7 @@ export default function Header() {
             }}
           >
             {projects.length === 0 ? (
-              <p style={{ padding: "10px 12px", fontSize: 13, color: "#8A96B0" }}>
+              <p style={{ padding: "10px 12px", fontSize: 13, color: "#7a7390" }}>
                 No projects found
               </p>
             ) : (
@@ -135,16 +135,16 @@ export default function Header() {
                     gap: 10,
                     width: "100%",
                     padding: "9px 12px",
-                    background: currentProject?.id === p.id ? "#EBF0FF" : "transparent",
+                    background: currentProject?.id === p.id ? "var(--brand-chip)" : "transparent",
                     border: "none",
-                    borderRadius: 8,
+                    borderRadius: 9,
                     cursor: "pointer",
                     textAlign: "left",
                     transition: "background 0.12s ease",
                   }}
                   onMouseEnter={(e) => {
                     if (currentProject?.id !== p.id)
-                      (e.currentTarget as HTMLButtonElement).style.background = "#F5F8FE";
+                      (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-surface)";
                   }}
                   onMouseLeave={(e) => {
                     if (currentProject?.id !== p.id)
@@ -156,7 +156,7 @@ export default function Header() {
                       width: 7,
                       height: 7,
                       borderRadius: "50%",
-                      background: statusDot[p.status] ?? "#8A96B0",
+                      background: statusDot[p.status] ?? "#7a7390",
                       flexShrink: 0,
                     }}
                   />
@@ -165,7 +165,7 @@ export default function Header() {
                       style={{
                         fontSize: 13,
                         fontWeight: currentProject?.id === p.id ? 600 : 500,
-                        color: currentProject?.id === p.id ? "#1B47D6" : "#0C1526",
+                        color: currentProject?.id === p.id ? "var(--brand)" : "#1f1638",
                         margin: 0,
                       }}
                     >
@@ -175,7 +175,7 @@ export default function Header() {
                       <p
                         style={{
                           fontSize: 11,
-                          color: "#8A96B0",
+                          color: "#7a7390",
                           margin: "1px 0 0",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -203,7 +203,7 @@ export default function Header() {
               left: 10,
               top: "50%",
               transform: "translateY(-50%)",
-              color: "#8A96B0",
+              color: "#7a7390",
               pointerEvents: "none",
             }}
           />
@@ -216,22 +216,22 @@ export default function Header() {
               paddingTop: 7,
               paddingBottom: 7,
               fontSize: 13,
-              border: "1px solid #E2E8F4",
-              borderRadius: 8,
-              background: "#F5F8FE",
-              color: "#0C1526",
+              border: "1px solid #ece7f5",
+              borderRadius: 10,
+              background: "var(--brand-surface)",
+              color: "#1f1638",
               outline: "none",
               width: 200,
               fontFamily: "inherit",
               transition: "border-color 0.15s, background 0.15s",
             }}
             onFocus={(e) => {
-              e.currentTarget.style.borderColor = "#C3D0F8";
+              e.currentTarget.style.borderColor = "var(--brand-border)";
               e.currentTarget.style.background = "#FFFFFF";
             }}
             onBlur={(e) => {
-              e.currentTarget.style.borderColor = "#E2E8F4";
-              e.currentTarget.style.background = "#F5F8FE";
+              e.currentTarget.style.borderColor = "#ece7f5";
+              e.currentTarget.style.background = "var(--brand-surface)";
             }}
           />
         </div>
@@ -241,19 +241,19 @@ export default function Header() {
             position: "relative",
             width: 34,
             height: 34,
-            borderRadius: 8,
+            borderRadius: 10,
             background: "transparent",
-            border: "1px solid #E2E8F4",
+            border: "1px solid #ece7f5",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
             transition: "background 0.12s",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#F5F8FE")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--brand-surface)")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
-          <Bell size={15} style={{ color: "#4D5E80" }} />
+          <Bell size={15} style={{ color: "#675f7e" }} />
           <span
             style={{
               position: "absolute",
@@ -274,7 +274,7 @@ export default function Header() {
             alignItems: "center",
             gap: 9,
             paddingLeft: 12,
-            borderLeft: "1px solid #E2E8F4",
+            borderLeft: "1px solid #ece7f5",
           }}
         >
           <div
@@ -282,19 +282,19 @@ export default function Header() {
               width: 32,
               height: 32,
               borderRadius: "50%",
-              background: "linear-gradient(135deg, #1B47D6, #3B82F6)",
+              background: "linear-gradient(135deg, var(--brand-dark), var(--brand))",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "#fff",
               fontSize: 12,
               fontWeight: 700,
-              boxShadow: "0 2px 8px rgba(27,71,214,0.25)",
+              boxShadow: "var(--shadow-brand)",
             }}
           >
             {initials}
           </div>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "#4D5E80" }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "#675f7e" }}>
             {user?.email ?? "user@sweaas.dev"}
           </span>
         </div>

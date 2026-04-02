@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,8 @@ from app.schemas.communication_schema import (
     EmailMessageResponse,
     ExplainerVideoRequest,
     ExplainerVideoResponse,
+    TavusReplica,
+    TavusReplicaListResponse,
 )
 from app.services.communication_service import CommunicationService
 from app.services.seed_data import AGENTS
@@ -172,6 +175,42 @@ async def get_cto_context(
         "active_tasks": active_tasks,
         "total_token_pct": round(total_used / total_budget * 100) if total_budget else 0,
     }
+
+
+@router.get("/replicas", response_model=TavusReplicaListResponse)
+async def list_replicas(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> TavusReplicaListResponse:
+    """Return available Tavus replicas so the frontend can let the user pick a CTO face.
+
+    Falls back to an empty list when TAVUS_API_KEY is not set.
+    """
+    from app.core.config import get_settings as _gs
+
+    settings = _gs()
+    if not settings.tavus_api_key:
+        return TavusReplicaListResponse(replicas=[])
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://tavusapi.com/v2/replicas",
+            headers={"x-api-key": settings.tavus_api_key},
+        )
+    if resp.status_code != 200:
+        return TavusReplicaListResponse(replicas=[])
+
+    raw = resp.json().get("data", [])
+    replicas = [
+        TavusReplica(
+            replica_id=r["replica_id"],
+            replica_name=r["replica_name"],
+            thumbnail_video_url=r.get("thumbnail_video_url", ""),
+            model_name=r.get("model_name", ""),
+        )
+        for r in raw
+        if r.get("status") == "completed"
+    ]
+    return TavusReplicaListResponse(replicas=replicas)
 
 
 @router.post("/cto-call", response_model=CTOCallResponse)

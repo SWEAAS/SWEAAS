@@ -21,8 +21,11 @@ export const agentApi = {
   list: () => api.get("/agents"),
   get: (id: string) => api.get(`/agents/${id}`),
   activity: (id: string) => api.get(`/agents/${id}/activity`),
-  chat: (id: string, message: string) =>
-    api.post(`/agents/${id}/chat`, { message }),
+  chat: (
+    id: string,
+    message: string,
+    history: { role: "user" | "assistant"; content: string }[] = [],
+  ) => api.post(`/agents/${id}/chat`, { message, history }),
 };
 
 // ── Budget API ───────────────────────────────────────────────────
@@ -50,6 +53,16 @@ export const projectApi = {
     timeline_weeks?: number;
     departments?: string[];
   }) => api.post("/projects", data),
+  patchConfig: (
+    id: string,
+    data: {
+      monthly_budget_usd?: number;
+      timeline_weeks?: number;
+      departments?: string[];
+      max_agents?: number;
+      github_username?: string;
+    },
+  ) => api.patch(`/projects/${id}/config`, data),
 };
 
 // ── Onboarding API ───────────────────────────────────────────────
@@ -76,8 +89,9 @@ export const observabilityApi = {
 // ── Communication API ────────────────────────────────────────────
 
 export const communicationApi = {
+  replicas: () => api.get("/communication/replicas"),
   ctoContext: () => api.get("/communication/cto-context"),
-  ctoCall: (data: { project_id?: string | null; topic: string }) =>
+  ctoCall: (data: { project_id?: string | null; topic: string; replica_id?: string | null }) =>
     api.post("/communication/cto-call", data),
   customerCall: (data: {
     project_id?: string;
