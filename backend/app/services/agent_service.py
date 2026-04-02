@@ -64,4 +64,5 @@ class AgentService:
             "status": agent["status"],
             "daily_token_budget": agent["daily_token_budget"],
             "tokens_used_today": agent["tokens_used_today"],
+            "current_focus": agent.get("current_focus", ""),
         }

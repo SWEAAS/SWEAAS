@@ -14,6 +14,7 @@ class AgentSummary(BaseModel):
     status: Literal["active", "warning", "paused", "strike"]
     daily_token_budget: int
     tokens_used_today: int
+    current_focus: str = ""
 
 
 class AgentActivity(BaseModel):

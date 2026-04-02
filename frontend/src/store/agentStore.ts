@@ -10,6 +10,7 @@ export interface Agent {
   status: string;
   daily_token_budget: number;
   tokens_used_today: number;
+  current_focus: string;
   parent_agent_id?: string | null;
 }
 

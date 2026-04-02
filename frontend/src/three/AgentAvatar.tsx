@@ -217,7 +217,7 @@ export default function AgentAvatar({
         SEAT_Y(floorIndex),
         position[2]
       );
-      groupRef.current.rotation.y = 0; // face monitor (monitor is at -z, chair opens toward +z)
+      groupRef.current.rotation.y = Math.PI; // face monitor at -z
 
       // Torso leans forward over keyboard
       if (torsoRef.current) torsoRef.current.rotation.x = 0.28;

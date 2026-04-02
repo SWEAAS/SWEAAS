@@ -79,33 +79,36 @@ function Workstation({
         <boxGeometry args={[0.36, 0.012, 0.14]} />
         <meshStandardMaterial color="#d1d5db" />
       </mesh>
-      {/* Ergonomic chair – seat */}
-      <mesh position={[0, 0.38, 0.52]}>
-        <boxGeometry args={[0.44, 0.07, 0.42]} />
-        <meshStandardMaterial color="#1e293b" />
-      </mesh>
-      {/* Chair back */}
-      <mesh position={[0, 0.63, 0.22]}>
-        <boxGeometry args={[0.42, 0.5, 0.06]} />
-        <meshStandardMaterial color="#1e293b" />
-      </mesh>
-      {/* Chair arm rests */}
-      {[-0.24, 0.24].map((cx, i) => (
-        <mesh key={i} position={[cx, 0.54, 0.38]}>
-          <boxGeometry args={[0.05, 0.04, 0.32]} />
+      {/* Chair – rotated 180° so back faces monitor, seat faces the person */}
+      <group rotation={[0, Math.PI, 0]} position={[0, 0, 0.52]}>
+        {/* Seat cushion */}
+        <mesh position={[0, 0.38, 0]}>
+          <boxGeometry args={[0.44, 0.07, 0.42]} />
+          <meshStandardMaterial color="#1e293b" />
+        </mesh>
+        {/* Chair back (now behind the seat toward the monitor) */}
+        <mesh position={[0, 0.63, -0.30]}>
+          <boxGeometry args={[0.42, 0.5, 0.06]} />
+          <meshStandardMaterial color="#1e293b" />
+        </mesh>
+        {/* Arm rests */}
+        {[-0.24, 0.24].map((cx, i) => (
+          <mesh key={i} position={[cx, 0.54, -0.14]}>
+            <boxGeometry args={[0.05, 0.04, 0.32]} />
+            <meshStandardMaterial color="#374151" />
+          </mesh>
+        ))}
+        {/* Pedestal */}
+        <mesh position={[0, 0.18, 0]}>
+          <cylinderGeometry args={[0.06, 0.06, 0.2, 6]} />
+          <meshStandardMaterial color="#4b5563" />
+        </mesh>
+        {/* Star base */}
+        <mesh position={[0, 0.06, 0]} rotation={[0, Math.PI / 6, 0]}>
+          <cylinderGeometry args={[0.22, 0.22, 0.03, 5]} />
           <meshStandardMaterial color="#374151" />
         </mesh>
-      ))}
-      {/* Chair pedestal */}
-      <mesh position={[0, 0.18, 0.52]}>
-        <cylinderGeometry args={[0.06, 0.06, 0.2, 6]} />
-        <meshStandardMaterial color="#4b5563" />
-      </mesh>
-      {/* Chair star base */}
-      <mesh position={[0, 0.06, 0.52]} rotation={[0, Math.PI / 6, 0]}>
-        <cylinderGeometry args={[0.22, 0.22, 0.03, 5]} />
-        <meshStandardMaterial color="#374151" />
-      </mesh>
+      </group>
     </group>
   );
 }

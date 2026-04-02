@@ -66,6 +66,7 @@ function CallReadyScreen({
   setCurrentProject,
   onBegin,
   loading,
+  error,
 }: {
   ctx: CTOContext | null;
   currentProject: Project | null;
@@ -73,6 +74,7 @@ function CallReadyScreen({
   setCurrentProject: (p: Project | null) => void;
   onBegin: () => void;
   loading: boolean;
+  error: string | null;
 }) {
   return (
     <div
@@ -266,6 +268,25 @@ function CallReadyScreen({
         Face-to-face · Powered by Tavus CVI
       </p>
 
+      {error && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: "10px 16px",
+            background: "#FEF2F2",
+            border: "1px solid #FECACA",
+            borderRadius: 10,
+            fontSize: 13,
+            color: "#DC2626",
+            fontWeight: 500,
+            maxWidth: 380,
+            textAlign: "center",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       {/* ── Optional project reference ─────────────────────────── */}
       {projects.length > 0 && (
         <div
@@ -336,6 +357,7 @@ export default function CTOCallView() {
   const { currentProject, projects, fetchProjects, setCurrentProject } = useProjectStore();
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
   const [ctx, setCtx] = useState<CTOContext | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -356,16 +378,20 @@ export default function CTOCallView() {
 
   const beginInterview = async () => {
     setLoading(true);
+    setCallError(null);
     try {
       const res = await communicationApi.ctoCall({
-        project_id: currentProject?.id,
+        project_id: currentProject?.id ?? null,
         topic: currentProject
           ? `Escalation call — project: ${currentProject.name}`
           : "New project kickoff — interview me about what I want to build",
       });
       setCallUrl(res.data.conversation_url);
-    } catch {
-      setCallUrl("https://meet.sweaas.dev/demo");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Failed to connect. Please try again.";
+      setCallError(msg);
     }
     setLoading(false);
   };
@@ -549,6 +575,7 @@ export default function CTOCallView() {
       setCurrentProject={setCurrentProject}
       onBegin={beginInterview}
       loading={loading}
+      error={callError}
     />
   );
 }

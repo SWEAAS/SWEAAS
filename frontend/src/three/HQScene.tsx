@@ -4,6 +4,7 @@ import Building from "./Building";
 import Floor from "./Floor";
 import AgentAvatar from "./AgentAvatar";
 import Staircase from "./Staircase";
+import DepartmentTV from "./DepartmentTV";
 import ExplorationControls from "./controls/ExplorationControls";
 import { useProjectStore } from "../store/projectStore";
 import type { Agent } from "../store/agentStore";
@@ -40,9 +41,9 @@ function outsidePos(idx: number): [number, number, number] {
 // ─── Floor definitions ───────────────────────────────────────────────────────
 
 const FLOORS = [
-  { dept: "engineering", color: "#dbeafe" },
-  { dept: "marketing",   color: "#fef3c7" },
-  { dept: "product",     color: "#d1fae5" },
+  { dept: "engineering", color: "#dbeafe", label: "Engineering" },
+  { dept: "marketing",   color: "#fef3c7", label: "Marketing"   },
+  { dept: "product",     color: "#d1fae5", label: "Product"     },
 ] as const;
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -118,6 +119,16 @@ export default function HQScene({ agents, onAgentClick }: HQSceneProps) {
         return (
           <group key={fi}>
             <Floor position={[0, yBase, 0]} color={f.color} />
+
+            {/* ── Department TV — mounted on the back wall, facing into the room ── */}
+            {deptAgents.length > 0 && (
+              <DepartmentTV
+                position={[-1.5, yBase + 2.2, -3.82]}
+                rotationY={0}
+                agents={deptAgents}
+                label={f.label}
+              />
+            )}
 
             {deptAgents.map((agent, j) => {
               // Engineering: static desk seat position (AgentAvatar will seat them)

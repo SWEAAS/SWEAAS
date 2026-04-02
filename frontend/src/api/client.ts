@@ -77,7 +77,7 @@ export const observabilityApi = {
 
 export const communicationApi = {
   ctoContext: () => api.get("/communication/cto-context"),
-  ctoCall: (data: { project_id: string; topic: string }) =>
+  ctoCall: (data: { project_id?: string | null; topic: string }) =>
     api.post("/communication/cto-call", data),
   customerCall: (data: {
     project_id?: string;

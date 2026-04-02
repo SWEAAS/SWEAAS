@@ -1,14 +1,20 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
+
+# Repo root is three levels above this file: backend/app/core/config.py
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+# Prefer root .env (has all real secrets); fall back to backend/.env for Docker
+_ENV_FILE = str(_REPO_ROOT / ".env") if (_REPO_ROOT / ".env").exists() else ".env"
 
 
 class Settings(BaseSettings):
     """Runtime settings — populated from env vars or .env file."""
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_file": _ENV_FILE, "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # Application
     app_name: str = "SWEAAS Backend"
