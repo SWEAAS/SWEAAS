@@ -44,6 +44,10 @@ def _build_cto_context(project: dict[str, Any]) -> str:
         parts.append(f"Timeline: {project['timeline_weeks']} weeks")
     if project.get("departments"):
         parts.append(f"Departments: {project['departments']}")
+    if project.get("agent_activity"):
+        parts.append(f"\nLive agent activity right now:\n{project['agent_activity']}")
+    if project.get("budget_warnings"):
+        parts.append(f"\nBudget warnings:\n{project['budget_warnings']}")
     return "\n".join(parts)
 
 

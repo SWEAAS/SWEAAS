@@ -1,32 +1,107 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
 
 @theme {
-  --color-sweaas-blue: #2563eb;
-  --color-sweaas-blue-light: #60a5fa;
-  --color-sweaas-blue-dark: #1d4ed8;
-  --color-sweaas-yellow: #f59e0b;
-  --color-sweaas-yellow-light: #fbbf24;
-  --color-sweaas-bg: #f8fafc;
-  --color-sweaas-card: #ffffff;
-  --color-sweaas-text: #0f172a;
-  --color-sweaas-text-secondary: #64748b;
-  --color-sweaas-border: #e2e8f0;
+  /* ── Brand blues ─────────────────────────────────────────────── */
+  --color-sweaas-blue:           #1B47D6;
+  --color-sweaas-blue-light:     #3B82F6;
+  --color-sweaas-blue-dark:      #1539B8;
+  --color-sweaas-blue-surface:   #EBF0FF;
+  --color-sweaas-blue-border:    #C3D0F8;
+
+  /* ── Neutrals ─────────────────────────────────────────────────── */
+  --color-sweaas-bg:             #F5F8FE;
+  --color-sweaas-surface:        #EEF2FB;
+  --color-sweaas-card:           #FFFFFF;
+  --color-sweaas-text:           #0C1526;
+  --color-sweaas-text-secondary: #4D5E80;
+  --color-sweaas-text-tertiary:  #8A96B0;
+  --color-sweaas-border:         #E2E8F4;
+  --color-sweaas-border-strong:  #C8D3E8;
+
+  /* ── Status ───────────────────────────────────────────────────── */
+  --color-sweaas-yellow:         #D97706;
 }
 
+/* ── CSS custom properties (shadows, easing) ─────────────────── */
+:root {
+  --shadow-xs:   0 1px 2px rgba(12,21,38,0.05);
+  --shadow-sm:   0 1px 3px rgba(12,21,38,0.07), 0 1px 2px rgba(12,21,38,0.04);
+  --shadow-md:   0 4px 12px rgba(12,21,38,0.08), 0 2px 4px rgba(12,21,38,0.04);
+  --shadow-lg:   0 8px 32px rgba(12,21,38,0.09), 0 2px 8px rgba(12,21,38,0.04);
+  --shadow-blue: 0 4px 20px rgba(27,71,214,0.22), 0 1px 4px rgba(27,71,214,0.12);
+  --shadow-blue-lg: 0 8px 40px rgba(27,71,214,0.28), 0 2px 8px rgba(27,71,214,0.14);
+
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
 body {
-  font-family:
-    "Inter",
-    system-ui,
-    -apple-system,
-    sans-serif;
-  background-color: var(--color-sweaas-bg);
-  color: var(--color-sweaas-text);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background-color: #F5F8FE;
+  color: #0C1526;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
+/* ── Scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar         { width: 5px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: #C8D3E8; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #9AABC8; }
+
+/* ── CTO Call screen animations ──────────────────────────────── */
+
+/* Avatar breathes very subtly — scale + shadow */
+@keyframes cto-avatar-breathe {
+  0%, 100% {
+    box-shadow: 0 8px 28px rgba(27,71,214,0.22), 0 2px 8px rgba(27,71,214,0.12);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 12px 48px rgba(27,71,214,0.34), 0 4px 16px rgba(27,71,214,0.18);
+    transform: scale(1.018);
+  }
 }
-::-webkit-scrollbar-thumb {
-  background: var(--color-sweaas-blue-light);
-  border-radius: 3px;
+
+/* Answer button: gentle blue glow pulse */
+@keyframes cto-btn-glow {
+  0%, 100% {
+    box-shadow: var(--shadow-blue);
+  }
+  50% {
+    box-shadow: var(--shadow-blue-lg);
+  }
+}
+
+/* Outer halo ring — single, slow, refined */
+@keyframes cto-halo {
+  0%   { transform: scale(1);   opacity: 0.45; }
+  100% { transform: scale(1.7); opacity: 0;    }
+}
+
+/* HQ button rings */
+@keyframes cto-hq-ring {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(1.85); opacity: 0;   }
+}
+
+/* Page entrance */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

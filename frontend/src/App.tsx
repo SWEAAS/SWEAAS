@@ -6,6 +6,7 @@ import CustomerCallPreview from "./views/CustomerCallPreview";
 import DashboardView from "./views/DashboardView";
 import LoginView from "./views/LoginView";
 import OnboardingView from "./views/OnboardingView";
+import OrgChartView from "./views/OrgChartView";
 import SettingsView from "./views/SettingsView";
 import { lazy, Suspense } from "react";
 
@@ -47,6 +48,7 @@ export default function App() {
             }
           />
           <Route path="/agents" element={<DashboardView />} />
+          <Route path="/org-chart" element={<OrgChartView />} />
           <Route path="/budget" element={<DashboardView />} />
           <Route path="/reports" element={<DashboardView />} />
           <Route path="/cto-call" element={<CTOCallView />} />

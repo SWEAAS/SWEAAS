@@ -27,6 +27,7 @@ from app.schemas.communication_schema import (
     ExplainerVideoResponse,
 )
 from app.services.communication_service import CommunicationService
+from app.services.seed_data import AGENTS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/communication", tags=["communication"])
@@ -119,6 +120,60 @@ async def create_customer_call(
     return await comm_service.create_customer_support_call(request, project_data=project_data)
 
 
+@router.get("/cto-context")
+async def get_cto_context(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> dict[str, Any]:
+    """Return a live snapshot of agent activity for the CTO call side panel.
+
+    Used by the frontend to populate the real-time agent feed during a call.
+    """
+    warnings = [a for a in AGENTS if a["status"] == "warning"]
+    active_tasks = [
+        {
+            "agent_id": a["agent_id"],
+            "agent_name": a["name"],
+            "department": a["department"],
+            "task": activity["title"],
+            "detail": activity["detail"],
+            "state": activity["state"],
+        }
+        for a in AGENTS
+        for activity in a.get("recent_activity", [])
+        if activity["state"] == "running"
+    ]
+    total_budget = sum(a["daily_token_budget"] for a in AGENTS)
+    total_used = sum(a["tokens_used_today"] for a in AGENTS)
+    return {
+        "agents": [
+            {
+                "agent_id": a["agent_id"],
+                "name": a["name"],
+                "role": a["role"],
+                "department": a["department"],
+                "status": a["status"],
+                "current_focus": a.get("current_focus", ""),
+                "tokens_used_today": a["tokens_used_today"],
+                "daily_token_budget": a["daily_token_budget"],
+                "token_pct": round(a["tokens_used_today"] / a["daily_token_budget"] * 100),
+                "strike_count": a.get("strike_count", 0),
+            }
+            for a in AGENTS
+        ],
+        "warnings": [
+            {
+                "agent_id": a["agent_id"],
+                "name": a["name"],
+                "department": a["department"],
+                "token_pct": round(a["tokens_used_today"] / a["daily_token_budget"] * 100),
+            }
+            for a in warnings
+        ],
+        "active_tasks": active_tasks,
+        "total_token_pct": round(total_used / total_budget * 100) if total_budget else 0,
+    }
+
+
 @router.post("/cto-call", response_model=CTOCallResponse)
 async def create_cto_call(
     request: CTOCallRequest,
@@ -128,12 +183,46 @@ async def create_cto_call(
 ) -> CTOCallResponse:
     """Start a video call with the CTO agent via Tavus.
 
-    Returns a conversation URL that can be embedded in the frontend
-    for a face-to-face discussion with the AI CTO.
+    Primary use case: new-project intake interview — no project_id required.
+    The CTO agent interviews the caller to gather requirements, budget, and team setup.
+
+    Secondary use case: escalation for an existing project when agents hit budget limits.
+    Pass project_id to inject live project context and agent activity into the conversation.
     """
-    project_data = await _fetch_project_data(db, request.project_id)
-    if project_data is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+    active_tasks = [
+        f"- {a['name']} ({a['department']}): {a.get('current_focus', 'idle')}"
+        for a in AGENTS
+        if a["status"] in ("active", "warning")
+    ]
+    warnings = [
+        f"- {a['name']}: {round(a['tokens_used_today'] / a['daily_token_budget'] * 100)}% tokens used"
+        for a in AGENTS
+        if a["status"] == "warning"
+    ]
+
+    project_data: dict[str, Any] | None = None
+    if request.project_id:
+        project_data = await _fetch_project_data(db, request.project_id)
+        if project_data is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if active_tasks:
+            project_data["agent_activity"] = "\n".join(active_tasks)
+        if warnings:
+            project_data["budget_warnings"] = "\n".join(warnings)
+    else:
+        # Interview mode — no existing project, just inject fleet context
+        project_data = {
+            "name": "New project (intake interview)",
+            "status": "pending",
+            "description": (
+                "The user is being interviewed to define their new project. "
+                "Ask about what they want to build, their team size, budget, "
+                "timeline, and which departments (engineering, marketing, product) they need."
+            ),
+        }
+        if active_tasks:
+            project_data["agent_activity"] = "\n".join(active_tasks)
+
     return await comm_service.create_cto_call(request, project_data=project_data)
 
 

@@ -1,11 +1,17 @@
-import { Activity, AlertTriangle, Pause, Zap } from "lucide-react";
 import type { Agent } from "../../store/agentStore";
 
-const statusConfig: Record<string, { color: string; icon: typeof Activity; label: string }> = {
-  active: { color: "text-green-500", icon: Activity, label: "Active" },
-  warning: { color: "text-sweaas-yellow", icon: AlertTriangle, label: "Warning" },
-  paused: { color: "text-gray-400", icon: Pause, label: "Paused" },
-  strike: { color: "text-red-500", icon: Zap, label: "Strike" },
+const statusConfig: Record<string, { dot: string; label: string; bg: string; text: string }> = {
+  active:  { dot: "#059669", label: "Active",  bg: "#ECFDF5", text: "#059669" },
+  warning: { dot: "#D97706", label: "Warning", bg: "#FFFBEB", text: "#D97706" },
+  paused:  { dot: "#8A96B0", label: "Paused",  bg: "#F5F8FE", text: "#8A96B0" },
+  strike:  { dot: "#DC2626", label: "Strike",  bg: "#FEF2F2", text: "#DC2626" },
+};
+
+const deptColor: Record<string, string> = {
+  engineering: "#1B47D6",
+  marketing:   "#D97706",
+  product:     "#7C3AED",
+  support:     "#059669",
 };
 
 interface AgentCardProps {
@@ -15,49 +21,135 @@ interface AgentCardProps {
 
 export default function AgentCard({ agent, onClick }: AgentCardProps) {
   const status = statusConfig[agent.status] ?? statusConfig.active;
-  const StatusIcon = status.icon;
-  const usagePercent = Math.round(
-    (agent.tokens_used_today / agent.daily_token_budget) * 100
-  );
+  const pct = Math.round((agent.tokens_used_today / agent.daily_token_budget) * 100);
+  const accent = deptColor[agent.department] ?? "#1B47D6";
+
+  const barColor =
+    pct >= 85 ? "#DC2626" :
+    pct >= 60 ? "#D97706" :
+    "#1B47D6";
 
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl border border-sweaas-border p-5 hover:shadow-md transition-shadow cursor-pointer"
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #E2E8F4",
+        borderRadius: 14,
+        padding: "18px 20px",
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease",
+        boxShadow: "var(--shadow-sm)",
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLDivElement;
+        el.style.boxShadow = "var(--shadow-md)";
+        el.style.borderColor = "#C3D0F8";
+        if (onClick) el.style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLDivElement;
+        el.style.boxShadow = "var(--shadow-sm)";
+        el.style.borderColor = "#E2E8F4";
+        el.style.transform = "translateY(0)";
+      }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-sweaas-text">{agent.name}</h3>
-          <p className="text-xs text-sweaas-text-secondary mt-0.5">
-            {agent.role.replace(/_/g, " ")} · {agent.department}
+      {/* Top row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "#0C1526", margin: 0, letterSpacing: "-0.01em" }}>
+            {agent.name}
           </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: accent,
+                background: `${accent}12`,
+                padding: "2px 7px",
+                borderRadius: 20,
+                textTransform: "capitalize",
+              }}
+            >
+              {agent.department}
+            </span>
+            <span style={{ fontSize: 11, color: "#8A96B0" }}>
+              {agent.role.replace(/_/g, " ")}
+            </span>
+          </div>
         </div>
-        <div className={`flex items-center gap-1 ${status.color}`}>
-          <StatusIcon size={14} />
-          <span className="text-xs font-medium">{status.label}</span>
+
+        {/* Status pill */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 9px",
+            background: status.bg,
+            borderRadius: 20,
+            flexShrink: 0,
+            marginLeft: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: status.dot,
+            }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 600, color: status.text }}>
+            {status.label}
+          </span>
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="flex justify-between text-xs text-sweaas-text-secondary mb-1">
-          <span>Token Usage</span>
-          <span>{usagePercent}%</span>
+      {/* Token usage */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: "#8A96B0", fontWeight: 500 }}>Token usage</span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: pct >= 85 ? "#DC2626" : "#0C1526",
+            }}
+          >
+            {pct}%
+          </span>
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          style={{
+            height: 5,
+            background: "#EEF2FB",
+            borderRadius: 10,
+            overflow: "hidden",
+          }}
+        >
           <div
-            className={`h-full rounded-full transition-all ${
-              usagePercent >= 85
-                ? "bg-red-400"
-                : usagePercent >= 60
-                  ? "bg-sweaas-yellow"
-                  : "bg-sweaas-blue"
-            }`}
-            style={{ width: `${Math.min(usagePercent, 100)}%` }}
+            style={{
+              height: "100%",
+              width: `${Math.min(pct, 100)}%`,
+              background: pct >= 85
+                ? "linear-gradient(90deg, #EF4444, #DC2626)"
+                : pct >= 60
+                ? "linear-gradient(90deg, #F59E0B, #D97706)"
+                : "linear-gradient(90deg, #3B82F6, #1B47D6)",
+              borderRadius: 10,
+              transition: "width 0.4s var(--ease-out)",
+            }}
           />
         </div>
-        <div className="flex justify-between text-xs text-sweaas-text-secondary mt-1">
-          <span>{(agent.tokens_used_today / 1000).toFixed(0)}K used</span>
-          <span>{(agent.daily_token_budget / 1000).toFixed(0)}K limit</span>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+          <span style={{ fontSize: 10, color: "#8A96B0" }}>
+            {(agent.tokens_used_today / 1000).toFixed(0)}K used
+          </span>
+          <span style={{ fontSize: 10, color: "#8A96B0" }}>
+            {(agent.daily_token_budget / 1000).toFixed(0)}K limit
+          </span>
         </div>
       </div>
     </div>

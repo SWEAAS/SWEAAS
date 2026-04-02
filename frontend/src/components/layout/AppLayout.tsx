@@ -4,11 +4,11 @@ import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
   return (
-    <div className="min-h-screen bg-sweaas-bg">
+    <div style={{ minHeight: "100vh", background: "#F5F8FE" }}>
       <Sidebar />
-      <div className="ml-64">
+      <div style={{ marginLeft: 232 }}>
         <Header />
-        <main className="p-8">
+        <main style={{ padding: "28px 32px" }}>
           <Outlet />
         </main>
       </div>

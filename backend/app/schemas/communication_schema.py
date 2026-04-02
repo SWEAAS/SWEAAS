@@ -30,8 +30,12 @@ class CalendarInviteResponse(BaseModel):
 
 
 class CTOCallRequest(BaseModel):
-    project_id: str
-    topic: str = Field(min_length=2, max_length=500)
+    project_id: str | None = None
+    topic: str = Field(
+        default="New project kickoff — interview me about what I want to build",
+        min_length=2,
+        max_length=500,
+    )
 
 
 class CTOCallResponse(BaseModel):
