@@ -18,6 +18,7 @@ from app.api.routes.github_router import router as github_router
 from app.api.routes.health_router import router as health_router
 from app.api.routes.observability_router import router as observability_router
 from app.api.routes.onboarding_router import router as onboarding_router
+from app.api.routes.orchestration_router import router as orchestration_router
 from app.api.routes.project_router import router as project_router
 
 api_router = APIRouter()
@@ -31,3 +32,4 @@ api_router.include_router(communication_router)
 api_router.include_router(feedback_router)
 api_router.include_router(github_router)
 api_router.include_router(observability_router)
+api_router.include_router(orchestration_router)

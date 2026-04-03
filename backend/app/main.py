@@ -85,7 +85,22 @@ async def lifespan(_app: FastAPI):
     budget_tracker.init_budgets(AGENTS)
     logger.info("Budget tracker ready — %d agents loaded", len(AGENTS))
     await _ensure_dev_user()
+
+    # Start the budget-based scheduler
+    try:
+        from app.services.scheduler_service import scheduler_service
+        await scheduler_service.start()
+    except Exception:
+        logger.warning("Scheduler startup skipped", exc_info=True)
+
     yield
+
+    # Shutdown scheduler
+    try:
+        from app.services.scheduler_service import scheduler_service
+        await scheduler_service.stop()
+    except Exception:
+        pass
 
 
 # ── App ──────────────────────────────────────────────────────────

@@ -57,6 +57,9 @@ class ProjectConfig(Base):
         String(500), default="engineering"
     )  # comma-separated list
     max_agents: Mapped[int] = mapped_column(Integer, default=5)
+    last_execution_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     project: Mapped[Project] = relationship(back_populates="config")

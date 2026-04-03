@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     chroma_host: str = "localhost"
     chroma_port: int = 8100
 
+    # AWS S3 (onboarding docs, PDF reports)
+    aws_region: str = "us-east-1"
+    s3_bucket_name: str = "sweaas-documents"
+
+    # Greptile PR review threshold (0.0 - 1.0)
+    greptile_merge_threshold: float = 0.8
+
     # LangSmith
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""

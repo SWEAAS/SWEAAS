@@ -1,20 +1,28 @@
 """Top-level LangGraph definition — the hierarchical agent orchestration graph.
 
 Architecture:
-  CTO (supervisor) -> conditional routing -> Department Managers -> Specialists
+  CTO (supervisor)
+    -> budget gate
+    -> conditional routing -> Department Managers -> Specialists
+    -> aggregator (collects all results)
+    -> CTO review (direction report)
+    -> END
 
 The graph enforces deterministic communication:
   - Tasks flow DOWN from CTO to managers to specialists
-  - Results/feedback flow UP from specialists to managers to CTO
+  - Results flow UP from specialists through the aggregator to CTO review
   - No cross-department lateral communication without CTO mediation
-  - Budget exhaustion triggers the "strike" mechanism
+  - Budget exhaustion triggers the "strike" mechanism (skips to aggregator)
 """
 
 import logging
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, Send, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
+from app.agents.nodes.aggregator import aggregator_node
 from app.agents.nodes.cto import cto_node
+from app.agents.nodes.cto_review import cto_review_node
 from app.agents.nodes.engineering_manager import engineering_manager_node
 from app.agents.nodes.marketing_manager import marketing_manager_node
 from app.agents.nodes.product_manager import product_manager_node
@@ -29,8 +37,22 @@ from app.agents.state import AgentState
 logger = logging.getLogger(__name__)
 
 
-def _route_after_cto(state: AgentState) -> list[str]:
-    """Determine which manager nodes to activate based on CTO's subtask decomposition."""
+async def _passthrough_node(state: AgentState) -> dict:
+    """No-op routing node used as a fan-out point after budget check."""
+    return {}
+
+
+def _check_budget(state: AgentState) -> str:
+    """Budget gate after CTO decomposition. Returns 'strike' or 'continue'."""
+    remaining = state.get("budget_remaining", 100_000)
+    if remaining <= 0:
+        logger.warning("Budget exhausted — entering strike state")
+        return "strike"
+    return "continue"
+
+
+def _route_after_budget(state: AgentState) -> list[Send]:
+    """After budget check passes, fan out to department managers via Send()."""
     subtasks = state.get("subtasks", [])
     departments = {s.get("department") for s in subtasks}
 
@@ -42,34 +64,55 @@ def _route_after_cto(state: AgentState) -> list[str]:
     if "marketing" in departments:
         targets.append("marketing_manager")
 
-    return targets if targets else ["engineering_manager"]
+    if not targets:
+        targets = ["engineering_manager"]
+
+    return [Send(target, state) for target in targets]
 
 
-def _route_after_eng_manager(state: AgentState) -> list[str]:
-    """Route to specific engineering specialists based on manager assignments."""
-    # In a full implementation, this would parse the manager's JSON assignments.
-    # For now, route to backend_architect as default.
-    return ["backend_architect"]
+def _route_after_eng_manager(state: AgentState) -> list[Send]:
+    """Route to engineering specialists based on manager assignments via Send()."""
+    assignments = state.get("assignments", [])
+    specialists_needed = set()
+    for a in assignments:
+        spec = a.get("specialist", "")
+        if spec in ("frontend_dev", "backend_architect", "devops", "qa_tester"):
+            specialists_needed.add(spec)
+
+    if not specialists_needed:
+        specialists_needed = {"backend_architect"}
+
+    return [Send(target, state) for target in specialists_needed]
 
 
-def _check_budget(state: AgentState) -> str:
-    """Check if budget is exhausted — triggers strike mechanism."""
-    remaining = state.get("budget_remaining", 100_000)
-    if remaining <= 0:
-        logger.warning("Budget exhausted — entering strike state")
-        return "strike"
-    return "continue"
+async def _budget_strike_node(state: AgentState) -> dict:
+    """Node when budget is exhausted — reports strike and moves to aggregator."""
+    logger.warning("Budget strike for project %s", state.get("project_id", "unknown"))
+    return {
+        "current_agent": "budget_strike",
+        "status": "budget_exhausted",
+        "results": [{
+            "agent": "budget_strike",
+            "output": "Budget exhausted. No specialist work performed this session.",
+        }],
+        "messages": [{
+            "role": "system",
+            "content": "Session halted: token budget exhausted (strike).",
+        }],
+    }
 
 
-def build_agent_graph(project_id: str | None = None) -> StateGraph:
+def build_agent_graph(project_id: str | None = None) -> CompiledStateGraph:
     """Construct the hierarchical agent graph.
 
-    Returns a compiled LangGraph StateGraph ready for execution.
+    Returns a compiled LangGraph ready for execution via ainvoke().
     """
     graph = StateGraph(AgentState)
 
-    # Add all agent nodes
+    # ── Nodes ──
     graph.add_node("cto", cto_node)
+    graph.add_node("budget_gate", _passthrough_node)
+    graph.add_node("budget_strike", _budget_strike_node)
     graph.add_node("engineering_manager", engineering_manager_node)
     graph.add_node("product_manager", product_manager_node)
     graph.add_node("marketing_manager", marketing_manager_node)
@@ -79,46 +122,46 @@ def build_agent_graph(project_id: str | None = None) -> StateGraph:
     graph.add_node("qa_tester", qa_tester_node)
     graph.add_node("product_ops", product_ops_node)
     graph.add_node("growth_analyst", growth_analyst_node)
+    graph.add_node("aggregator", aggregator_node)
+    graph.add_node("cto_review", cto_review_node)
 
-    # Entry point
+    # ── Entry ──
     graph.set_entry_point("cto")
 
-    # CTO -> Department Managers (conditional fan-out)
+    # ── CTO -> budget gate ──
     graph.add_conditional_edges(
         "cto",
-        _route_after_cto,
+        _check_budget,
         {
-            "engineering_manager": "engineering_manager",
-            "product_manager": "product_manager",
-            "marketing_manager": "marketing_manager",
+            "strike": "budget_strike",
+            "continue": "budget_gate",
         },
     )
 
-    # Engineering Manager -> Specialists
-    graph.add_conditional_edges(
-        "engineering_manager",
-        _route_after_eng_manager,
-        {
-            "frontend_dev": "frontend_dev",
-            "backend_architect": "backend_architect",
-            "devops": "devops",
-            "qa_tester": "qa_tester",
-        },
-    )
+    # Budget gate fans out to department managers via Send()
+    graph.add_conditional_edges("budget_gate", _route_after_budget)
 
-    # Product Manager -> Product Ops
+    # ── Budget strike -> aggregator ──
+    graph.add_edge("budget_strike", "aggregator")
+
+    # ── Engineering Manager -> Specialists (parallel fan-out via Send) ──
+    graph.add_conditional_edges("engineering_manager", _route_after_eng_manager)
+
+    # ── Product/Marketing -> their specialists ──
     graph.add_edge("product_manager", "product_ops")
-
-    # Marketing Manager -> Growth Analyst
     graph.add_edge("marketing_manager", "growth_analyst")
 
-    # All specialists terminate at END
-    graph.add_edge("frontend_dev", END)
-    graph.add_edge("backend_architect", END)
-    graph.add_edge("devops", END)
-    graph.add_edge("qa_tester", END)
-    graph.add_edge("product_ops", END)
-    graph.add_edge("growth_analyst", END)
+    # ── All specialists -> aggregator ──
+    graph.add_edge("frontend_dev", "aggregator")
+    graph.add_edge("backend_architect", "aggregator")
+    graph.add_edge("devops", "aggregator")
+    graph.add_edge("qa_tester", "aggregator")
+    graph.add_edge("product_ops", "aggregator")
+    graph.add_edge("growth_analyst", "aggregator")
+
+    # ── Aggregator -> CTO Review -> END ──
+    graph.add_edge("aggregator", "cto_review")
+    graph.add_edge("cto_review", END)
 
     compiled = graph.compile()
     logger.info("Agent graph compiled for project %s", project_id)

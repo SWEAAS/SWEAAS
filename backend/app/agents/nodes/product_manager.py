@@ -33,15 +33,17 @@ async def product_manager_node(state: AgentState) -> dict:
                         "content": (
                             "You are the Product Manager. Analyze product tasks, "
                             "create actionable items for product operations, and "
-                            "respond with a JSON plan."
+                            "respond with a JSON plan with 'assignments' array."
                         ),
                     },
                     {"role": "user", "content": f"Product tasks:\n{tasks_text}"},
                 ],
                 agent_id="prd-mgr-01",
             )
+            assignments = _parse_prod_assignments(result.content, prod_tasks)
             return {
                 "current_agent": "product_manager",
+                "assignments": assignments,
                 "messages": [{"role": "product_manager", "content": result.content}],
                 "status": "assigned",
             }
@@ -59,6 +61,21 @@ async def product_manager_node(state: AgentState) -> dict:
     payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "product_manager",
+        "assignments": assignments,
         "messages": [{"role": "product_manager", "content": payload}],
         "status": "assigned",
     }
+
+
+def _parse_prod_assignments(llm_content: str, fallback_tasks: list[dict]) -> list[dict]:
+    """Try to parse structured assignments from LLM JSON response."""
+    try:
+        parsed = json.loads(llm_content)
+        if "assignments" in parsed and isinstance(parsed["assignments"], list):
+            return parsed["assignments"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return [
+        {"specialist": "product_ops", "task": t["description"], "priority": t.get("priority", "medium")}
+        for t in fallback_tasks
+    ]
