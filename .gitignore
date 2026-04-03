@@ -23,11 +23,12 @@ coverage.xml
 github-app-key.pem
 twilio_2FA_recovery_code.txt
 
-# Firebase / GCP service account keys
+# Firebase / GCP service account keys & OAuth client secrets
 *firebase-adminsdk*.json
 *-adminsdk-*.json
 *service-account*.json
 credentials.json
+client_secret*.json
 
 # ── OS ───────────────────────────────────────
 .DS_Store

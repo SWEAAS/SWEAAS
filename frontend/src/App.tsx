@@ -1,7 +1,9 @@
 import * as Sentry from "@sentry/react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
+import { isSupabaseConfigured } from "./lib/supabase";
 import { useAuthStore } from "./store/authStore";
+import AuthCallbackView from "./views/AuthCallbackView";
 import CTOCallView from "./views/CTOCallView";
 import CTOReplicaDirectoryView from "./views/CTOReplicaDirectoryView";
 import CustomerCallPreview from "./views/CustomerCallPreview";
@@ -22,13 +24,22 @@ const WelcomeHWView = lazy(() => import("./three/WelcomeHWView"));
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
+  const initialized = useAuthStore((s) => s.initialized);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
 
   useEffect(() => {
     if (isAuthenticated && !user) {
-      fetchProfile();
+      void fetchProfile();
     }
   }, [isAuthenticated, user, fetchProfile]);
+
+  if (isSupabaseConfigured() && !initialized) {
+    return (
+      <div className="min-h-screen bg-sweaas-bg flex items-center justify-center text-sweaas-text-secondary">
+        Loading…
+      </div>
+    );
+  }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -51,12 +62,22 @@ function SentryFallback() {
   );
 }
 
+function AuthBootstrap({ children }: { children: React.ReactNode }) {
+  const initialize = useAuthStore((s) => s.initialize);
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Sentry.ErrorBoundary fallback={<SentryFallback />}>
       <BrowserRouter>
+        <AuthBootstrap>
         <Routes>
           <Route path="/login" element={<LoginView />} />
+          <Route path="/auth/callback" element={<AuthCallbackView />} />
 
           <Route
             element={
@@ -109,6 +130,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </AuthBootstrap>
       </BrowserRouter>
     </Sentry.ErrorBoundary>
   );
