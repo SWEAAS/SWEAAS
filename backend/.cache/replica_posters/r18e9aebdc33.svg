@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="hsl(115 52% 20%)"/>
+      <stop offset="0.58" stop-color="hsl(143 58% 32%)"/>
+      <stop offset="1" stop-color="hsl(183 72% 50%)"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" rx="42" fill="url(#bg)"/>
+  <circle cx="180" cy="170" r="130" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="980" cy="700" r="170" fill="rgba(255,255,255,0.12)"/>
+  <text x="600" y="400" fill="white" font-size="220" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif">R-</text>
+  <text x="600" y="575" fill="white" font-size="64" font-weight="600" text-anchor="middle" font-family="'Plus Jakarta Sans', Arial, sans-serif">Raj - Doctor</text>
+</svg>

@@ -31,6 +31,11 @@ class AgentDetail(AgentSummary):
     current_focus: str
     strike_count: int = Field(ge=0)
     parent_agent_id: str | None = None
+    email: str | None = None
+    pronouns: str | None = None
+    location: str | None = None
+    timezone: str | None = None
+    start_date: str | None = None
     recent_activity: list[AgentActivity]
 
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
   Bug,
   CheckCircle,
   ExternalLink,
@@ -9,12 +10,15 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AgentCard from "../components/dashboard/AgentCard";
 import BudgetChart from "../components/dashboard/BudgetChart";
 import TaskSummary from "../components/dashboard/TaskSummary";
 import { useAgentStore } from "../store/agentStore";
 import { useBudgetStore } from "../store/budgetStore";
 import { useProjectStore } from "../store/projectStore";
+import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
+import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 import { observabilityApi } from "../api/client";
 
 interface SentryIssue {
@@ -30,14 +34,17 @@ export default function DashboardView() {
   const { agents, fetchAgents } = useAgentStore();
   const { consumptionPercent, fetchSummary } = useBudgetStore();
   const { currentProject, fetchProjects } = useProjectStore();
+  const { config, fetchConfig } = useTeamOnboardingStore();
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[]>([]);
   const [sentryLoading, setSentryLoading] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAgents();
     fetchSummary();
     fetchProjects();
-  }, [fetchAgents, fetchSummary, fetchProjects]);
+    fetchConfig();
+  }, [fetchAgents, fetchSummary, fetchProjects, fetchConfig]);
 
   useEffect(() => {
     setSentryLoading(true);
@@ -47,14 +54,15 @@ export default function DashboardView() {
       .finally(() => setSentryLoading(false));
   }, [currentProject?.id]);
 
-  const activeCount = agents.filter((a) => a.status === "active").length;
-  const warningCount = agents.filter((a) => a.status === "warning").length;
-  const runningTasks = agents
+  const displayAgents = mergeAgentsWithTeamConfig(agents, config);
+  const activeCount = displayAgents.filter((a) => a.status === "active").length;
+  const warningCount = displayAgents.filter((a) => a.status === "warning").length;
+  const runningTasks = displayAgents
     .flatMap((a) => (a as unknown as { recent_activity?: { state: string }[] }).recent_activity ?? [])
     .filter((act) => act.state === "running").length;
 
   const stats = [
-    { label: "Total Agents",  value: agents.length,   icon: Users,          color: "text-[var(--brand)]",  bg: "bg-[var(--brand-surface)]" },
+    { label: "Total Agents",  value: displayAgents.length,   icon: Users,          color: "text-[var(--brand)]",  bg: "bg-[var(--brand-surface)]" },
     { label: "Active",        value: activeCount,     icon: Zap,            color: "text-emerald-600",      bg: "bg-emerald-50" },
     { label: "Running Tasks", value: runningTasks || activeCount, icon: Sparkles, color: "text-[var(--brand)]", bg: "bg-[var(--brand-chip)]" },
     { label: "Warnings",      value: warningCount,    icon: AlertTriangle,  color: "text-amber-600",        bg: "bg-amber-50" },
@@ -69,6 +77,34 @@ export default function DashboardView() {
 
   return (
     <div className="space-y-6">
+      <section className="overflow-hidden rounded-[28px] border border-[#e7e0f6] bg-[linear-gradient(135deg,#1f1638_0%,#3e2c72_55%,#7c5cff_100%)] p-6 text-white shadow-[0_24px_70px_-50px_rgba(42,26,92,0.45)]">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/88 backdrop-blur">
+              <Sparkles size={12} />
+              {config.completed ? "Team configured" : "Onboarding"}
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              {config.completed ? "Your team is onboarded" : "Onboard your team"}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+              {config.completed
+                ? `${config.company_size || "Your"} employees, $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget, and ${displayAgents.length} configured AI teammates are now driving the org chart and CTO surfaces.`
+                : "Answer a few questions, assign your Tavus personas once, and we’ll populate the org chart, CTO face, and employee roster across the product."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate("/onboarding")}
+            className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/20 bg-white px-5 py-3 text-[14px] font-semibold text-[#1f1638] transition-transform hover:-translate-y-0.5"
+          >
+            {config.completed ? "Edit onboarding" : "Onboard your team"}
+            <ArrowRight size={15} />
+          </button>
+        </div>
+      </section>
+
       {/* ── Hero header ─────────────────────────────────────────── */}
       <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] p-8 shadow-[0_30px_80px_-50px_rgba(42,26,92,0.3)]">
         <div className="flex items-start justify-between gap-6">
@@ -162,10 +198,10 @@ export default function DashboardView() {
         <div className="mb-4 flex items-center gap-2">
           <Users size={15} className="text-[#675f7e]" />
           <h3 className="text-[15px] font-semibold text-[#1f1638]">Agent Directory</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">{agents.length} agents</span>
+          <span className="ml-auto text-[11px] text-[#7a7390]">{displayAgents.length} agents</span>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {agents.map((agent) => (
+          {displayAgents.map((agent) => (
             <AgentCard key={agent.agent_id} agent={agent} />
           ))}
         </div>

@@ -68,7 +68,7 @@ async def get_current_user(
     When ``AUTH_ENFORCE_JWT`` is false, returns a placeholder dev user (no Supabase session).
     """
     if not settings.auth_enforce_jwt:
-        return AuthenticatedUser(uid="dev-user", email="dev@sweaas.dev", role="authenticated")
+        return AuthenticatedUser(uid="dev-user", email="user@sweaas.dev", role="owner")
 
     if credentials is None:
         raise HTTPException(

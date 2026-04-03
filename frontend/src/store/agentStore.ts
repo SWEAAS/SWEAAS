@@ -3,6 +3,7 @@ import { agentApi } from "../api/client";
 
 export interface Agent {
   agent_id: string;
+  archetype_agent_id?: string | null;
   name: string;
   role: string;
   department: string;
@@ -12,6 +13,10 @@ export interface Agent {
   tokens_used_today: number;
   current_focus: string;
   parent_agent_id?: string | null;
+  replica_id?: string | null;
+  poster_image_url?: string | null;
+  thumbnail_video_url?: string;
+  model_name?: string;
 }
 
 interface AgentState {

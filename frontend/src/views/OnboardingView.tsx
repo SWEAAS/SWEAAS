@@ -1,69 +1,182 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   ArrowLeft,
+  ArrowRight,
   Building2,
-  GitBranch,
-  CreditCard,
   CheckCircle,
+  CreditCard,
+  Phone,
   Sparkles,
+  Users,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { communicationApi } from "../api/client";
+import { getFeaturedReplicas } from "../components/cto-page/replicaUtils";
+import type { TavusReplica } from "../components/cto-page/types";
+import {
+  MAX_ORG_SIZE,
+  useTeamOnboardingStore,
+} from "../store/teamOnboardingStore";
+import {
+  buildDepartmentSizesForCompanySize,
+  getDepartmentSizesWithFallback,
+  getRoleLabelForAssignment,
+  normalizeDepartmentSizesForCompanySize,
+  recommendTeamAssignments,
+} from "../utils/teamOnboarding";
 
-type Step = "company" | "github" | "budget" | "departments" | "review";
+type Step = "company" | "departments" | "cto" | "review";
 
 const inputClass =
   "w-full rounded-[12px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3 text-[14px] text-[#1f1638] font-[inherit] outline-none transition-colors focus:border-[var(--brand-border)] focus:bg-white";
 
+function formatCurrency(value: number) {
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
 export default function OnboardingView() {
+  const navigate = useNavigate();
+  const { config, fetchConfig, saveConfig, saving, error } = useTeamOnboardingStore();
   const [step, setStep] = useState<Step>("company");
-  const [form, setForm] = useState({
-    company_name: "",
-    contact_email: "",
-    github_username: "",
-    monthly_budget_usd: 5000,
-    timeline_weeks: 4,
-    departments: ["engineering"] as string[],
-  });
+  const [replicas, setReplicas] = useState<TavusReplica[]>([]);
+  const [replicasLoading, setReplicasLoading] = useState(false);
+  const [replicasError, setReplicasError] = useState<string | null>(null);
+  const [companySize, setCompanySize] = useState(50);
+  const [overallBudgetUsd, setOverallBudgetUsd] = useState(6000);
+  const [departmentSizes, setDepartmentSizes] = useState(buildDepartmentSizesForCompanySize(50));
+  const [selectedCtoReplicaId, setSelectedCtoReplicaId] = useState<string | null>(null);
 
   const steps: { key: Step; label: string; icon: typeof Building2 }[] = [
-    { key: "company",     label: "Company",  icon: Building2 },
-    { key: "github",      label: "GitHub",   icon: GitBranch },
-    { key: "budget",      label: "Budget",   icon: CreditCard },
-    { key: "departments", label: "Team",     icon: Building2 },
-    { key: "review",      label: "Review",   icon: CheckCircle },
+    { key: "company", label: "Company", icon: Building2 },
+    { key: "departments", label: "Departments", icon: Users },
+    { key: "cto", label: "CTO", icon: Phone },
+    { key: "review", label: "Review", icon: CheckCircle },
   ];
 
-  const currentIdx = steps.findIndex((s) => s.key === step);
+  const currentIdx = steps.findIndex((candidate) => candidate.key === step);
 
-  const toggleDept = (dept: string) => {
-    setForm((f) => ({
-      ...f,
-      departments: f.departments.includes(dept)
-        ? f.departments.filter((d) => d !== dept)
-        : [...f.departments, dept],
+  useEffect(() => {
+    void fetchConfig();
+    setReplicasLoading(true);
+    setReplicasError(null);
+    communicationApi
+      .replicas()
+      .then((response) => setReplicas(response.data.replicas ?? []))
+      .catch(() => {
+        setReplicas([]);
+        setReplicasError("Could not load Tavus replicas. We can still save once replicas come back.");
+      })
+      .finally(() => setReplicasLoading(false));
+  }, [fetchConfig]);
+
+  useEffect(() => {
+    setCompanySize(config.company_size || 50);
+    setOverallBudgetUsd(config.overall_budget_usd || 6000);
+    setDepartmentSizes(
+      normalizeDepartmentSizesForCompanySize(
+        config.company_size || 50,
+        config.assignments.length > 0
+          ? getDepartmentSizesWithFallback(config.department_sizes)
+          : buildDepartmentSizesForCompanySize(config.company_size || 50),
+      ),
+    );
+    setSelectedCtoReplicaId(config.cto_assignment?.replica_id ?? null);
+  }, [config]);
+
+  const featuredReplicas = useMemo(() => getFeaturedReplicas(replicas), [replicas]);
+
+  useEffect(() => {
+    if (!selectedCtoReplicaId && featuredReplicas.length > 0) {
+      setSelectedCtoReplicaId(config.cto_assignment?.replica_id ?? featuredReplicas[0].replica_id);
+    }
+  }, [config.cto_assignment?.replica_id, featuredReplicas, selectedCtoReplicaId]);
+
+  const selectedCtoReplica = useMemo(
+    () => replicas.find((replica) => replica.replica_id === selectedCtoReplicaId) ?? null,
+    [replicas, selectedCtoReplicaId],
+  );
+
+  const nonCtoHeadcount = Math.max(0, companySize - 1);
+  const assignedHeadcount = useMemo(
+    () => Object.values(departmentSizes).reduce((sum, value) => sum + value, 0),
+    [departmentSizes],
+  );
+  const unassignedHeadcount = nonCtoHeadcount - assignedHeadcount;
+
+  const recommendation = useMemo(
+    () =>
+      recommendTeamAssignments(
+        replicas,
+        departmentSizes,
+        selectedCtoReplica
+          ? {
+              agent_id: "cto-01",
+              archetype_agent_id: "cto-01",
+              department: "engineering",
+              role: "cto",
+              hierarchy_level: "cto",
+              parent_agent_id: null,
+              ...selectedCtoReplica,
+            }
+          : null,
+      ),
+    [departmentSizes, replicas, selectedCtoReplica],
+  );
+  const previewAssignments = recommendation.assignments.slice(0, 24);
+
+  async function handleSave() {
+    const result = await saveConfig({
+      completed: true,
+      company_size: companySize,
+      overall_budget_usd: overallBudgetUsd,
+      department_sizes: departmentSizes,
+      cto_assignment: selectedCtoReplica
+        ? {
+            agent_id: "cto-01",
+            archetype_agent_id: "cto-01",
+            department: "engineering",
+            role: "cto",
+            hierarchy_level: "cto",
+            parent_agent_id: null,
+            ...selectedCtoReplica,
+          }
+        : null,
+      assignments: recommendation.assignments,
+    });
+
+    if (result) {
+      navigate("/dashboard");
+    }
+  }
+
+  function updateDepartmentSize(department: keyof typeof departmentSizes, value: number) {
+    setDepartmentSizes((current) => ({
+      ...current,
+      [department]: Math.max(0, Math.min(value, nonCtoHeadcount)),
     }));
-  };
+  }
 
   return (
-    <div className="mx-auto max-w-2xl py-12 space-y-6">
-      {/* ── Hero ─────────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] px-8 py-7 text-center shadow-[0_24px_70px_-50px_rgba(42,26,92,0.3)]">
+    <div className="mx-auto max-w-6xl space-y-6 py-6">
+      <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] px-8 py-7 shadow-[0_24px_70px_-50px_rgba(42,26,92,0.3)]">
         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-white/75 px-3 py-1 text-xs font-medium text-[var(--brand)] backdrop-blur">
           <Sparkles size={12} />
-          Getting started
+          Team onboarding
         </div>
-        <h2 className="text-3xl font-semibold tracking-tight text-[#1f1638]">Welcome to SWEAAS</h2>
-        <p className="mt-2 text-sm text-[#675f7e]">Set up your AI-powered engineering team in minutes</p>
+        <h2 className="text-3xl font-semibold tracking-tight text-[#1f1638]">Onboard your team</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#675f7e]">
+          Answer a few setup questions and we&apos;ll help you shape your AI organization, choose the
+          right people for each role, and carry that setup through the rest of the product.
+        </p>
       </section>
 
-      {/* ── Progress steps ────────────────────────────────────── */}
       <div className="flex items-center justify-center gap-2">
-        {steps.map((s, i) => {
-          const Icon = s.icon;
-          const isActive = i === currentIdx;
-          const isDone = i < currentIdx;
+        {steps.map((candidate, index) => {
+          const Icon = candidate.icon;
+          const isActive = index === currentIdx;
+          const isDone = index < currentIdx;
           return (
-            <div key={s.key} className="flex items-center gap-2">
+            <div key={candidate.key} className="flex items-center gap-2">
               <div className="flex flex-col items-center gap-1">
                 <div
                   className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-all"
@@ -79,150 +192,358 @@ export default function OnboardingView() {
                   className="text-[10px] font-medium uppercase tracking-[0.1em]"
                   style={{ color: isActive ? "var(--brand)" : isDone ? "#059669" : "#7a7390" }}
                 >
-                  {s.label}
+                  {candidate.label}
                 </span>
               </div>
-              {i < steps.length - 1 && (
+              {index < steps.length - 1 ? (
                 <div
                   className="mb-5 h-0.5 w-10 transition-colors"
                   style={{ background: isDone ? "#059669" : "#ece7f5" }}
                 />
-              )}
+              ) : null}
             </div>
           );
         })}
       </div>
 
-      {/* ── Step content ──────────────────────────────────────── */}
       <section className="rounded-[28px] border border-[#ece7f5] bg-white p-8 shadow-[0_16px_42px_-34px_rgba(42,26,92,0.25)]">
-        {step === "company" && (
-          <div className="space-y-5">
-            <h3 className="text-[17px] font-semibold text-[#1f1638]">Company Information</h3>
+        {step === "company" ? (
+          <div className="space-y-6">
             <div>
-              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Company Name</label>
-              <input type="text" value={form.company_name} onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))} placeholder="Acme Inc." className={inputClass} />
+              <h3 className="text-[18px] font-semibold text-[#1f1638]">Company profile</h3>
+              <p className="mt-1 text-[13px] text-[#675f7e]">
+                These values define the size and budget of the AI organization you are configuring.
+              </p>
             </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Contact Email</label>
-              <input type="email" value={form.contact_email} onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))} placeholder="you@company.com" className={inputClass} />
-            </div>
-          </div>
-        )}
 
-        {step === "github" && (
-          <div className="space-y-5">
-            <h3 className="text-[17px] font-semibold text-[#1f1638]">GitHub Access</h3>
-            <p className="text-[13px] text-[#675f7e]">
-              We'll create a repository for your project and optionally give you collaborator access.
-            </p>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">GitHub Username (optional)</label>
-              <input type="text" value={form.github_username} onChange={(e) => setForm((f) => ({ ...f, github_username: e.target.value }))} placeholder="your-github-handle" className={inputClass} />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
+                  Organization size
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_ORG_SIZE}
+                  value={companySize}
+                  onChange={(event) => {
+                    const nextCompanySize = Math.max(1, Math.min(MAX_ORG_SIZE, Number(event.target.value) || 1));
+                    setCompanySize(nextCompanySize);
+                    setDepartmentSizes((current) => normalizeDepartmentSizesForCompanySize(nextCompanySize, current));
+                  }}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-[11px] text-[#7a7390]">
+                  This is the total number of AI agents in your organization, including the CTO. The hard max is {MAX_ORG_SIZE.toLocaleString()}.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
+                  Overall monthly budget (USD)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={overallBudgetUsd}
+                  onChange={(event) => setOverallBudgetUsd(Math.max(1, Number(event.target.value) || 1))}
+                  className={inputClass}
+                />
+              </div>
             </div>
-          </div>
-        )}
 
-        {step === "budget" && (
-          <div className="space-y-5">
-            <h3 className="text-[17px] font-semibold text-[#1f1638]">Budget & Timeline</h3>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Monthly Budget (USD)</label>
-              <input type="number" value={form.monthly_budget_usd} onChange={(e) => setForm((f) => ({ ...f, monthly_budget_usd: Number(e.target.value) }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
-                Timeline — {form.timeline_weeks} weeks
-              </label>
-              <input
-                type="range" min={1} max={52} value={form.timeline_weeks}
-                onChange={(e) => setForm((f) => ({ ...f, timeline_weeks: Number(e.target.value) }))}
-                className="w-full"
-                style={{ accentColor: "var(--brand)" }}
-              />
-              <div className="flex justify-between mt-1 text-[10px] text-[#7a7390]">
-                <span>1 week</span><span>52 weeks</span>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
+                  <Users size={14} />
+                  Organization size
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{companySize}</p>
+              </div>
+              <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
+                  <CreditCard size={14} />
+                  Budget
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-[#1f1638]">
+                  {formatCurrency(overallBudgetUsd)}
+                </p>
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {step === "departments" && (
-          <div className="space-y-5">
-            <h3 className="text-[17px] font-semibold text-[#1f1638]">Select Departments</h3>
-            <p className="text-[13px] text-[#675f7e]">Choose which departments your AI team should cover.</p>
-            <div className="grid grid-cols-3 gap-3">
-              {["engineering", "marketing", "product"].map((dept) => {
-                const active = form.departments.includes(dept);
-                return (
-                  <button
-                    key={dept}
-                    onClick={() => toggleDept(dept)}
-                    className="rounded-[16px] border p-4 text-[13px] font-medium capitalize transition-all"
-                    style={{
-                      background: active ? "var(--brand-chip)" : "#f8f6fc",
-                      color: active ? "var(--brand)" : "#7a7390",
-                      borderColor: active ? "var(--brand-border)" : "#ece7f5",
-                      borderWidth: active ? 2 : 1,
-                    }}
-                  >
-                    {dept}
-                  </button>
-                );
-              })}
+        {step === "departments" ? (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-[18px] font-semibold text-[#1f1638]">Department sizes</h3>
+              <p className="mt-1 text-[13px] text-[#675f7e]">
+                Split your non-CTO headcount across departments. We will generate a hierarchical roster from these counts, then reuse personas silently with alphabetic suffixes once the unique face pool is exhausted.
+              </p>
             </div>
-          </div>
-        )}
 
-        {step === "review" && (
-          <div className="space-y-5">
-            <h3 className="text-[17px] font-semibold text-[#1f1638]">Review & Launch</h3>
-            <div className="rounded-[16px] border border-[#ece7f5] bg-[#f8f6fc] p-5 space-y-2.5 text-[13px]">
-              {[
-                ["Company",     form.company_name],
-                ["Email",       form.contact_email],
-                ["GitHub",      form.github_username || "Not provided"],
-                ["Budget",      `$${form.monthly_budget_usd}/month`],
-                ["Timeline",    `${form.timeline_weeks} weeks`],
-                ["Departments", form.departments.join(", ")],
-              ].map(([label, value]) => (
-                <div key={label} className="flex gap-2">
-                  <span className="font-semibold text-[#675f7e] w-24 shrink-0">{label}</span>
-                  <span className="text-[#1f1638]">{value}</span>
+            <div className="grid gap-4 md:grid-cols-2">
+              {(Object.keys(departmentSizes) as Array<keyof typeof departmentSizes>).map((department) => (
+                <div key={department} className="rounded-[22px] border border-[#ece7f5] bg-[#faf8fd] px-5 py-4">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold capitalize text-[#1f1638]">{department}</p>
+                      <p className="mt-1 text-[11px] text-[#7a7390]">Total employees in this department</p>
+                    </div>
+                    <span className="text-2xl font-semibold text-[#1f1638]">
+                      {departmentSizes[department as keyof typeof departmentSizes]}
+                    </span>
+                  </div>
+
+                  <div className="mt-4">
+                    <input
+                      type="number"
+                      min={0}
+                      max={nonCtoHeadcount}
+                      value={departmentSizes[department]}
+                      onChange={(event) => updateDepartmentSize(department, Number(event.target.value) || 0)}
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
-            <button
-              className="mt-2 w-full rounded-[12px] py-3 text-[14px] font-bold text-white transition-opacity"
-              style={{ background: "var(--brand)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
-            >
-              Launch My AI Team
-            </button>
-          </div>
-        )}
 
-        {/* Navigation */}
-        {step !== "review" && (
-          <div className="mt-8 flex justify-between">
-            <button
-              onClick={() => setStep(steps[currentIdx - 1]?.key ?? "company")}
-              disabled={currentIdx === 0}
-              className="flex items-center gap-2 rounded-[10px] px-4 py-2 text-[13px] font-medium text-[#7a7390] transition-colors hover:text-[#1f1638] disabled:opacity-30"
-            >
-              <ArrowLeft size={15} /> Back
-            </button>
-            <button
-              onClick={() => setStep(steps[currentIdx + 1]?.key ?? "review")}
-              className="flex items-center gap-2 rounded-[12px] px-6 py-2.5 text-[13px] font-bold text-white transition-opacity"
-              style={{ background: "var(--brand)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
-            >
-              Next <ArrowRight size={15} />
-            </button>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
+                  <Users size={14} />
+                  Non-CTO headcount
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{nonCtoHeadcount}</p>
+              </div>
+              <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
+                  <Users size={14} />
+                  Assigned
+                </div>
+                <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{assignedHeadcount}</p>
+              </div>
+              <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
+                  <Users size={14} />
+                  Remaining
+                </div>
+                <p className={`mt-2 text-2xl font-semibold ${unassignedHeadcount === 0 ? "text-[#1f1638]" : "text-amber-600"}`}>
+                  {unassignedHeadcount}
+                </p>
+              </div>
+            </div>
+
+            {unassignedHeadcount !== 0 ? (
+              <p className="text-[13px] text-amber-700">
+                Department totals must equal {nonCtoHeadcount} before you continue.
+              </p>
+            ) : null}
           </div>
-        )}
+        ) : null}
+
+        {step === "cto" ? (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-[18px] font-semibold text-[#1f1638]">Choose your CTO face</h3>
+              <p className="mt-1 text-[13px] text-[#675f7e]">
+                This face becomes the default CTO identity. In very large orgs, the same underlying Tavus persona may still be reused elsewhere with suffix-based display names.
+              </p>
+            </div>
+
+            {replicasLoading ? (
+              <div className="rounded-[22px] border border-[#ece7f5] bg-[#faf8fd] px-5 py-8 text-[13px] text-[#675f7e]">
+                Loading Tavus replicas...
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {featuredReplicas.map((replica) => {
+                  const selected = selectedCtoReplicaId === replica.replica_id;
+                  return (
+                    <button
+                      key={replica.replica_id}
+                      type="button"
+                      onClick={() => setSelectedCtoReplicaId(replica.replica_id)}
+                      className={[
+                        "overflow-hidden rounded-[22px] border bg-white text-left transition-[transform,border-color,box-shadow] duration-200 ease-out",
+                        selected
+                          ? "border-[var(--brand-border)] shadow-[0_22px_46px_-30px_rgba(124,92,255,0.4)] ring-2 ring-[var(--brand-border)]"
+                          : "border-[#ece7f5] hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-24px_rgba(17,24,39,0.22)]",
+                      ].join(" ")}
+                    >
+                      <div className="aspect-[4/3] overflow-hidden bg-[#f0ebfb]">
+                        {replica.poster_image_url ? (
+                          <img
+                            src={replica.poster_image_url}
+                            alt={replica.replica_name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : replica.thumbnail_video_url ? (
+                          <video
+                            src={replica.thumbnail_video_url}
+                            className="h-full w-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="px-4 py-4">
+                        <p className="text-[15px] font-semibold text-[#1f1638]">{replica.replica_name}</p>
+                        <p className="mt-1 text-[12px] text-[#675f7e]">{replica.model_name}</p>
+                        {selected ? (
+                          <span className="mt-3 inline-flex rounded-full bg-[var(--brand-chip)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
+                            Selected CTO
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {replicasError ? <p className="text-[13px] text-[#9b3d6b]">{replicasError}</p> : null}
+          </div>
+        ) : null}
+
+        {step === "review" ? (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-[18px] font-semibold text-[#1f1638]">Review your generated team</h3>
+              <p className="mt-1 text-[13px] text-[#675f7e]">
+                We generate the full org from your department totals, then reuse personas with subtle alphabetic suffixes only when the unique face pool runs out.
+              </p>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+              <div className="rounded-[22px] border border-[#ece7f5] bg-[#faf8fd] px-5 py-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a7390]">
+                  Workspace summary
+                </p>
+                <div className="mt-4 space-y-3 text-[13px]">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-[#7a7390]">Employees</span>
+                    <span className="font-semibold text-[#1f1638]">{companySize}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-[#7a7390]">Budget</span>
+                    <span className="font-semibold text-[#1f1638]">{formatCurrency(overallBudgetUsd)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-[#7a7390]">AI roster</span>
+                    <span className="font-semibold text-[#1f1638]">{1 + recommendation.assignments.length}</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-[18px] border border-[#ece7f5] bg-white px-4 py-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a7390]">CTO</p>
+                  <p className="mt-2 text-[16px] font-semibold text-[#1f1638]">
+                    {selectedCtoReplica?.replica_name ?? "No CTO selected"}
+                  </p>
+                  <p className="mt-1 text-[12px] text-[#675f7e]">
+                    This face becomes the default on the CTO call page.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-[#ece7f5] bg-white px-5 py-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a7390]">
+                  Assigned personas
+                </p>
+                <p className="mt-2 text-[12px] text-[#7a7390]">
+                  Showing {previewAssignments.length} of {recommendation.assignments.length} non-CTO assignments.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {previewAssignments.map((assignment) => {
+                    return (
+                      <div
+                        key={assignment.agent_id}
+                        className="overflow-hidden rounded-[18px] border border-[#ece7f5] bg-[#faf8fd]"
+                      >
+                        <div className="aspect-[4/3] overflow-hidden bg-[#f0ebfb]">
+                          {assignment.poster_image_url ? (
+                            <img
+                              src={assignment.poster_image_url}
+                              alt={assignment.replica_name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="px-4 py-4">
+                          <p className="text-[14px] font-semibold text-[#1f1638]">
+                            {getRoleLabelForAssignment(assignment)}
+                          </p>
+                          <p className="mt-1 text-[12px] capitalize text-[#7a7390]">
+                            {assignment.department}
+                          </p>
+                          <p className="mt-3 text-[15px] font-medium text-[#2f2554]">
+                            {assignment.replica_name}
+                          </p>
+                          <p className="mt-1 text-[12px] text-[#675f7e]">{assignment.model_name}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {recommendation.assignments.length > previewAssignments.length ? (
+                  <p className="mt-4 text-[12px] text-[#7a7390]">
+                    {recommendation.assignments.length - previewAssignments.length} additional employees will be generated when you save.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-8 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              if (currentIdx === 0) {
+                navigate("/dashboard");
+                return;
+              }
+              setStep(steps[currentIdx - 1]?.key ?? "company");
+            }}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-[#ece7f5] px-4 text-[13px] font-medium text-[#675f7e] transition-colors hover:bg-[#faf8fd] hover:text-[#1f1638]"
+          >
+            <ArrowLeft size={15} />
+            {currentIdx === 0 ? "Back to dashboard" : "Back"}
+          </button>
+
+          {step !== "review" ? (
+            <button
+              type="button"
+              onClick={() => setStep(steps[currentIdx + 1]?.key ?? "review")}
+              disabled={step === "departments" && unassignedHeadcount !== 0}
+              className="flex h-10 items-center gap-2 rounded-[12px] px-6 text-[13px] font-bold text-white transition-opacity"
+              style={{ background: "var(--brand)" }}
+            >
+              Next
+              <ArrowRight size={15} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={
+                saving ||
+                !selectedCtoReplica ||
+                unassignedHeadcount !== 0 ||
+                recommendation.assignments.length !== nonCtoHeadcount
+              }
+              className="h-11 rounded-[12px] px-6 text-[14px] font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ background: "var(--brand)" }}
+            >
+              {saving ? "Saving team..." : config.completed ? "Update team onboarding" : "Save and populate product"}
+            </button>
+          )}
+        </div>
+
+        {error ? <p className="mt-4 text-[13px] text-red-600">{error}</p> : null}
       </section>
     </div>
   );

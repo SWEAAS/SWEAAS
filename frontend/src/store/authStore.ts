@@ -5,6 +5,7 @@ interface User {
   email: string;
   full_name: string;
   github_username: string;
+  role?: string;
 }
 
 interface AuthState {
@@ -28,6 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       email: _email,
       full_name: "Dev User",
       github_username: "",
+      role: _email === "user@sweaas.dev" ? "owner" : "authenticated",
     };
     const devToken = "dev-token";
     localStorage.setItem("sweaas_token", devToken);

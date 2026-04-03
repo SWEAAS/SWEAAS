@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Annotated, Any
 
-import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,14 +26,24 @@ from app.schemas.communication_schema import (
     EmailMessageResponse,
     ExplainerVideoRequest,
     ExplainerVideoResponse,
+    TavusConfigCheckResponse,
+    TavusReconciliationActionRequest,
+    TavusReconciliationActionResponse,
+    TavusReconciliationItem,
+    TavusReconciliationResponse,
     TavusReplica,
     TavusReplicaListResponse,
+    TavusWarmCheckAttempt,
+    TavusWarmCheckResponse,
 )
 from app.services.communication_service import CommunicationService
+from app.services.replica_catalog_service import ReplicaCatalogService
 from app.services.seed_data import AGENTS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/communication", tags=["communication"])
+_REPLICA_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+replica_catalog_service = ReplicaCatalogService()
 
 
 async def _fetch_project_data(
@@ -179,38 +189,156 @@ async def get_cto_context(
 
 @router.get("/replicas", response_model=TavusReplicaListResponse)
 async def list_replicas(
+    request: Request,
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TavusReplicaListResponse:
-    """Return available Tavus replicas so the frontend can let the user pick a CTO face.
+    """Return stored Tavus replicas from the local catalog for user-facing flows."""
+    replicas = await replica_catalog_service.list_stored_replicas(db)
+    return TavusReplicaListResponse(
+        replicas=[
+            TavusReplica(
+                replica_id=replica.replica_id,
+                replica_name=replica.replica_name,
+                thumbnail_video_url=replica.thumbnail_video_url,
+                model_name=replica.model_name,
+                poster_image_url=replica_catalog_service.build_asset_url(request, replica),
+            )
+            for replica in replicas
+        ]
+    )
 
-    Falls back to an empty list when TAVUS_API_KEY is not set.
-    """
-    from app.core.config import get_settings as _gs
 
-    settings = _gs()
-    if not settings.tavus_api_key:
-        return TavusReplicaListResponse(replicas=[])
+@router.post("/admin/replicas/warm-check", response_model=TavusWarmCheckResponse)
+async def warm_check_replicas(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> TavusWarmCheckResponse:
+    """Admin-only warm check against Tavus using retry/backoff before reconciliation."""
+    replica_catalog_service.ensure_admin(user)
+    result = await replica_catalog_service.warm_check()
+    return TavusWarmCheckResponse(
+        ok=result["ok"],
+        attempts=[TavusWarmCheckAttempt(**attempt) for attempt in result["attempts"]],
+    )
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://tavusapi.com/v2/replicas",
-            headers={"x-api-key": settings.tavus_api_key},
+
+@router.get("/admin/tavus-config-check", response_model=TavusConfigCheckResponse)
+async def tavus_config_check(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    comm_service: Annotated[CommunicationService, Depends(get_communication_service)],
+) -> TavusConfigCheckResponse:
+    """Admin-only check for the configured internal Tavus replica/persona pair."""
+    replica_catalog_service.ensure_admin(user)
+    return await comm_service.inspect_tavus_internal_call_config()
+
+
+@router.get("/admin/replicas/reconciliation", response_model=TavusReconciliationResponse)
+async def reconcile_replicas(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TavusReconciliationResponse:
+    """Admin-only diff between live Tavus replicas and the stored catalog."""
+    replica_catalog_service.ensure_admin(user)
+    result = await replica_catalog_service.summarize_reconciliation(db)
+    return TavusReconciliationResponse(
+        name_mismatch=[TavusReconciliationItem(**item) for item in result["name_mismatch"]],
+        missing_in_database=[
+            TavusReconciliationItem(**item) for item in result["missing_in_database"]
+        ],
+        updates_to_stored_replica=[
+            TavusReconciliationItem(**item) for item in result["updates_to_stored_replica"]
+        ],
+    )
+
+
+@router.post("/admin/replicas/reconciliation/actions", response_model=TavusReconciliationActionResponse)
+async def apply_replica_reconciliation_action(
+    request: Request,
+    payload: TavusReconciliationActionRequest,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TavusReconciliationActionResponse:
+    """Admin-only apply endpoint for Tavus reconciliation actions."""
+    replica_catalog_service.ensure_admin(user)
+    replica = await replica_catalog_service.apply_action(db, payload.action, payload.model_dump())
+    if replica is None:
+        return TavusReconciliationActionResponse(applied=payload.action != "dismiss", replica=None)
+    return TavusReconciliationActionResponse(
+        applied=True,
+        replica=TavusReplica(
+            replica_id=replica.replica_id,
+            replica_name=replica.replica_name,
+            thumbnail_video_url=replica.thumbnail_video_url,
+            model_name=replica.model_name,
+            poster_image_url=replica_catalog_service.build_asset_url(request, replica),
+        ),
+    )
+
+
+@router.get("/replica-posters/{replica_id}")
+async def get_replica_poster(
+    replica_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    if_none_match: Annotated[str | None, Header()] = None,
+) -> Response:
+    """Serve the preferred cached poster for a stored Tavus replica."""
+    if not _REPLICA_ID_PATTERN.fullmatch(replica_id):
+        raise HTTPException(status_code=404, detail="Replica poster not found")
+
+    replica = await replica_catalog_service._get_by_replica_id(db, replica_id)
+    if replica is None:
+        raise HTTPException(status_code=404, detail="Replica poster not found")
+
+    etag = replica_catalog_service.build_poster_etag(replica)
+    cache_headers = {
+        "Cache-Control": "public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400",
+        "ETag": etag,
+        "Vary": "Accept",
+    }
+    if if_none_match == etag:
+        return Response(status_code=304, headers=cache_headers)
+
+    if replica.poster_image_bytes is not None and replica.poster_image_content_type:
+        return Response(
+            content=replica.poster_image_bytes,
+            media_type=replica.poster_image_content_type,
+            headers=cache_headers,
         )
-    if resp.status_code != 200:
-        return TavusReplicaListResponse(replicas=[])
+    return Response(
+        content=replica.poster_svg,
+        media_type="image/svg+xml",
+        headers=cache_headers,
+    )
 
-    raw = resp.json().get("data", [])
-    replicas = [
-        TavusReplica(
-            replica_id=r["replica_id"],
-            replica_name=r["replica_name"],
-            thumbnail_video_url=r.get("thumbnail_video_url", ""),
-            model_name=r.get("model_name", ""),
-        )
-        for r in raw
-        if r.get("status") == "completed"
-    ]
-    return TavusReplicaListResponse(replicas=replicas)
+
+@router.get("/replica-posters/svg/{replica_id}")
+async def get_replica_poster_svg(
+    replica_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    if_none_match: Annotated[str | None, Header()] = None,
+) -> Response:
+    """Serve the generated SVG fallback poster for a stored Tavus replica."""
+    if not _REPLICA_ID_PATTERN.fullmatch(replica_id):
+        raise HTTPException(status_code=404, detail="Replica poster not found")
+
+    replica = await replica_catalog_service._get_by_replica_id(db, replica_id)
+    if replica is None:
+        raise HTTPException(status_code=404, detail="Replica poster not found")
+
+    etag = replica_catalog_service.build_poster_etag(replica)
+    cache_headers = {
+        "Cache-Control": "public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400",
+        "ETag": etag,
+        "Vary": "Accept",
+    }
+    if if_none_match == etag:
+        return Response(status_code=304, headers=cache_headers)
+
+    return Response(
+        content=replica.poster_svg,
+        media_type="image/svg+xml",
+        headers=cache_headers,
+    )
 
 
 @router.post("/cto-call", response_model=CTOCallResponse)

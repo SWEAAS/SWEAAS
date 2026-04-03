@@ -1,26 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   Loader2,
   PhoneOff,
   Plus,
-  Search,
   Zap,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { communicationApi, projectApi } from "../api/client";
+import CTOReplicaSelector from "../components/cto-page/CTOReplicaSelector";
+import type { TavusReplica } from "../components/cto-page/types";
+import { useAgentStore } from "../store/agentStore";
 import { useProjectStore } from "../store/projectStore";
 import type { Project } from "../store/projectStore";
-
-interface TavusReplica {
-  replica_id: string;
-  replica_name: string;
-  thumbnail_video_url: string;
-  model_name: string;
-}
+import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
+import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 
 interface AgentCtx {
   agent_id: string;
@@ -42,6 +38,14 @@ interface CTOContext {
   total_token_pct: number;
 }
 
+interface InternalCallTarget {
+  agent_id: string;
+  name: string;
+  role: string;
+  department: "engineering" | "marketing" | "product" | "support";
+  hierarchy_level: "cto" | "manager" | "specialist";
+}
+
 const deptAccent: Record<string, string> = {
   engineering: "#1B47D6",
   marketing:   "#D97706",
@@ -55,6 +59,13 @@ const statusDot: Record<string, string> = {
   paused:  "#8A96B0",
   strike:  "#DC2626",
 };
+
+function formatLabel(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 // ── Small token bar ──────────────────────────────────────────────
 function MiniBar({ pct }: { pct: number }) {
@@ -78,184 +89,6 @@ function MiniBar({ pct }: { pct: number }) {
   );
 }
 
-// ── Single lazy-loading replica video tile ────────────────────────
-function ReplicaVideoTile({
-  replica,
-  active,
-  onSelect,
-}: {
-  replica: TavusReplica;
-  active: boolean;
-  onSelect: (r: TavusReplica) => void;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  return (
-    <button
-      title={`${replica.replica_name} (${replica.model_name})`}
-      onMouseEnter={() => videoRef.current?.play().catch(() => {})}
-      onMouseLeave={() => {
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.currentTime = 0;
-        }
-      }}
-      onClick={() => onSelect(replica)}
-      className={[
-        "flex flex-col items-center gap-1.5 rounded-[12px] border p-1.5 transition-all cursor-pointer",
-        active
-          ? "border-[var(--brand)] bg-[var(--brand-chip)]"
-          : "border-[#ece7f5] bg-[#f8f6fc] hover:border-[var(--brand-border)] hover:bg-[var(--brand-surface)]",
-      ].join(" ")}
-    >
-      <div
-        className={[
-          "w-11 h-11 rounded-[9px] overflow-hidden shrink-0",
-          active ? "ring-2 ring-[var(--brand)]" : "",
-        ].join(" ")}
-      >
-        <video
-          ref={videoRef}
-          src={replica.thumbnail_video_url}
-          preload="none"
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover"
-        />
-      </div>
-      <span
-        className={[
-          "text-[9px] font-medium text-center leading-tight w-full truncate block px-0.5",
-          active ? "text-[var(--brand)] font-semibold" : "text-[#7a7390]",
-        ].join(" ")}
-      >
-        {replica.replica_name}
-      </span>
-    </button>
-  );
-}
-
-// ── Replica picker ────────────────────────────────────────────────
-function ReplicaPicker({
-  replicas,
-  selected,
-  onSelect,
-}: {
-  replicas: TavusReplica[];
-  selected: TavusReplica | null;
-  onSelect: (r: TavusReplica | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-
-  if (replicas.length === 0) return null;
-
-  const filtered = query.trim()
-    ? replicas.filter((r) =>
-        r.replica_name.toLowerCase().includes(query.toLowerCase()),
-      )
-    : replicas;
-
-  return (
-    <div className="mt-7 w-full max-w-[440px] overflow-hidden rounded-[18px] border border-[#ece7f5] bg-white shadow-sm">
-      {/* Header toggle */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3.5 hover:bg-[var(--brand-surface)] transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          {selected ? (
-            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border-2 border-[var(--brand-border)]">
-              <video
-                src={selected.thumbnail_video_url}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ) : (
-            <div
-              className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold italic text-white"
-              style={{ background: "linear-gradient(135deg,var(--brand-dark),var(--brand))" }}
-            >
-              CTO
-            </div>
-          )}
-          <div className="text-left">
-            <p className="text-[10px] font-bold text-[#7a7390] uppercase tracking-[0.1em]">CTO Face</p>
-            <p className="text-[13px] font-semibold text-[#1f1638]">
-              {selected ? selected.replica_name : "Default — choose a face"}
-            </p>
-          </div>
-        </div>
-        {open
-          ? <ChevronUp size={14} className="text-[#7a7390] shrink-0" />
-          : <ChevronDown size={14} className="text-[#7a7390] shrink-0" />
-        }
-      </button>
-
-      {/* Grid — only mounted when open */}
-      {open && (
-        <div className="border-t border-[#ece7f5] px-3 pb-3">
-          {/* Search */}
-          <div className="relative my-2.5">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#7a7390] pointer-events-none" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search replicas…"
-              className="w-full rounded-[10px] border border-[#ece7f5] bg-[#f8f6fc] pl-7 pr-3 py-1.5 text-[12px] text-[#1f1638] outline-none focus:border-[var(--brand-border)] placeholder:text-[#7a7390]"
-            />
-          </div>
-
-          <div
-            className="grid gap-1.5 overflow-y-auto"
-            style={{ gridTemplateColumns: "repeat(5,1fr)", maxHeight: 300 }}
-          >
-            {/* Default tile */}
-            <button
-              onClick={() => { onSelect(null); setOpen(false); setQuery(""); }}
-              className={[
-                "flex flex-col items-center gap-1.5 rounded-[12px] border p-1.5 transition-all cursor-pointer",
-                selected === null
-                  ? "border-[var(--brand)] bg-[var(--brand-chip)]"
-                  : "border-[#ece7f5] bg-[#f8f6fc] hover:border-[var(--brand-border)]",
-              ].join(" ")}
-            >
-              <div
-                className="w-11 h-11 rounded-[9px] flex items-center justify-center text-[11px] font-bold italic text-white"
-                style={{ background: "linear-gradient(135deg,var(--brand-dark),var(--brand))" }}
-              >
-                CTO
-              </div>
-              <span className={`text-[9px] font-medium ${selected === null ? "text-[var(--brand)]" : "text-[#7a7390]"}`}>
-                Default
-              </span>
-            </button>
-
-            {filtered.map((r) => (
-              <ReplicaVideoTile
-                key={r.replica_id}
-                replica={r}
-                active={selected?.replica_id === r.replica_id}
-                onSelect={(replica) => { onSelect(replica); setOpen(false); setQuery(""); }}
-              />
-            ))}
-          </div>
-
-          {filtered.length === 0 && (
-            <p className="py-4 text-center text-[12px] text-[#7a7390]">No replicas match "{query}"</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Pre-call screen ───────────────────────────────────────────────
 function CallReadyScreen({
   ctx,
@@ -268,6 +101,12 @@ function CallReadyScreen({
   replicas,
   selectedReplica,
   setSelectedReplica,
+  showReplicaSelector,
+  setShowReplicaSelector,
+  replicasLoading,
+  replicasError,
+  callTarget,
+  isEmployeeCall,
 }: {
   ctx: CTOContext | null;
   currentProject: Project | null;
@@ -279,7 +118,24 @@ function CallReadyScreen({
   replicas: TavusReplica[];
   selectedReplica: TavusReplica | null;
   setSelectedReplica: (r: TavusReplica | null) => void;
+  showReplicaSelector: boolean;
+  setShowReplicaSelector: (value: boolean) => void;
+  replicasLoading: boolean;
+  replicasError: string | null;
+  callTarget: InternalCallTarget | null;
+  isEmployeeCall: boolean;
 }) {
+  const identityName = callTarget?.name ?? selectedReplica?.replica_name ?? "CTO Agent";
+  const identitySubhead = callTarget
+    ? `${formatLabel(callTarget.role)} · ${formatLabel(callTarget.department)} · Tavus`
+    : selectedReplica
+      ? "AI teammate · Tavus"
+      : "AI Chief Technology Officer · Tavus";
+  const introCopy = isEmployeeCall
+    ? `${identityName} will join with the shared internal call brain, and the backend will brief Tavus with this person's role, level, and your topic before the call starts.`
+    : "Your CTO will interview you about what you want to build — requirements, team structure, budget, and timeline — then stand up your AI engineering team.";
+  const cannotStart = loading || !selectedReplica || (isEmployeeCall && !callTarget);
+
   return (
     <div className="flex min-h-[calc(100vh-60px)] flex-col items-center justify-center px-6 py-12 animate-[slide-up_0.35s_var(--ease-out)_both]"
       style={{ background: "radial-gradient(ellipse 70% 50% at 50% 30%, var(--brand-surface) 0%, transparent 70%), #f8f6fc" }}
@@ -294,15 +150,29 @@ function CallReadyScreen({
           }}
         />
         <div
-          className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full select-none"
+          className="relative z-10 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full select-none"
           style={{
             background: "linear-gradient(145deg, var(--brand-dark) 0%, var(--brand) 60%, color-mix(in srgb, var(--brand) 70%, white) 100%)",
             animation: "cto-avatar-breathe 4s ease-in-out infinite",
           }}
         >
-          <span className="font-['Instrument_Serif',Georgia,serif] text-[22px] italic font-normal text-white/90 tracking-[0.02em]">
-            CTO
-          </span>
+          {selectedReplica?.poster_image_url ? (
+            <img src={selectedReplica.poster_image_url} alt={identityName} className="h-full w-full object-cover" />
+          ) : selectedReplica?.thumbnail_video_url ? (
+            <video
+              src={selectedReplica.thumbnail_video_url}
+              className="h-full w-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <span className="font-['Instrument_Serif',Georgia,serif] text-[22px] italic font-normal text-white/90 tracking-[0.02em]">
+              CTO
+            </span>
+          )}
         </div>
         <div
           className="absolute bottom-[5px] right-[5px] z-20 h-4 w-4 rounded-full border-[2.5px] border-[#f8f6fc]"
@@ -312,14 +182,13 @@ function CallReadyScreen({
 
       {/* Identity */}
       <h1 className="font-['Instrument_Serif',Georgia,serif] text-[30px] font-normal text-[#1f1638] m-0 mb-1.5 tracking-[-0.02em] text-center">
-        CTO Agent
+        {identityName}
       </h1>
       <p className="text-[11px] font-semibold text-[var(--brand)] tracking-[0.1em] uppercase mb-3.5">
-        AI Chief Technology Officer · Tavus
+        {identitySubhead}
       </p>
       <p className="text-[14px] text-[#675f7e] text-center max-w-[380px] leading-[1.7] mb-9 font-normal">
-        Your CTO will interview you about what you want to build — requirements,
-        team structure, budget, and timeline — then stand up your AI engineering team.
+        {introCopy}
       </p>
 
       {/* Warning badge */}
@@ -335,14 +204,14 @@ function CallReadyScreen({
       {/* Begin button */}
       <button
         onClick={onBegin}
-        disabled={loading}
+        disabled={cannotStart}
         className="flex items-center gap-2.5 px-9 py-3.5 rounded-[12px] text-white text-[14px] font-bold tracking-[-0.01em] mb-2.5 transition-all disabled:opacity-60 disabled:cursor-default"
         style={{
-          background: loading ? "#7a7390" : "var(--brand)",
-          animation: loading ? "none" : "cto-btn-glow 3s ease-in-out infinite",
+          background: cannotStart ? "#7a7390" : "var(--brand)",
+          animation: cannotStart ? "none" : "cto-btn-glow 3s ease-in-out infinite",
         }}
-        onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
-        onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
+        onMouseEnter={(e) => { if (!cannotStart) (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
+        onMouseLeave={(e) => { if (!cannotStart) (e.currentTarget as HTMLButtonElement).style.background = "var(--brand)"; }}
         onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
         onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
       >
@@ -365,6 +234,25 @@ function CallReadyScreen({
         )}
       </button>
       <p className="text-[11px] text-[#7a7390] m-0">Face-to-face · Powered by Tavus CVI</p>
+      {isEmployeeCall && !callTarget ? (
+        <p className="mt-2 text-[12px] text-amber-700">
+          Loading this employee&apos;s org details before the call starts.
+        </p>
+      ) : null}
+
+      {!isEmployeeCall ? (
+        <button
+          type="button"
+          onClick={() => setShowReplicaSelector(!showReplicaSelector)}
+          className="mt-4 rounded-full border border-[#ece7f5] bg-white px-4 py-2 text-[12px] font-semibold text-[#675f7e] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-surface)] hover:text-[var(--brand)]"
+        >
+          {showReplicaSelector ? "Hide CTO gallery" : "Change my CTO"}
+        </button>
+      ) : (
+        <p className="mt-4 max-w-[420px] text-center text-[12px] text-[#7a7390]">
+          This is a one-off employee call. Your saved CTO face stays unchanged.
+        </p>
+      )}
 
       {error && (
         <div className="mt-3.5 px-4 py-2.5 bg-red-50 border border-red-200 rounded-[10px] text-[13px] text-red-600 font-medium max-w-[380px] text-center">
@@ -409,11 +297,18 @@ function CallReadyScreen({
         </div>
       )}
 
-      <ReplicaPicker
-        replicas={replicas}
-        selected={selectedReplica}
-        onSelect={setSelectedReplica}
-      />
+      {!isEmployeeCall && showReplicaSelector ? (
+        <CTOReplicaSelector
+          replicas={replicas}
+          selectedReplica={selectedReplica}
+          onSelect={(replica) => {
+            setSelectedReplica(replica);
+            setShowReplicaSelector(false);
+          }}
+          loading={replicasLoading}
+          error={replicasError}
+        />
+      ) : null}
     </div>
   );
 }
@@ -573,7 +468,12 @@ function CreateProjectModal({
 
 // ── Main ─────────────────────────────────────────────────────────
 export default function CTOCallView() {
+  const { agents, fetchAgents } = useAgentStore();
   const { currentProject, projects, fetchProjects, setCurrentProject } = useProjectStore();
+  const { config, fetchConfig, patchCtoAssignment } = useTeamOnboardingStore();
+  const [searchParams] = useSearchParams();
+  const routeAgentId = searchParams.get("agent_id");
+  const routeReplicaId = searchParams.get("replica");
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [callError, setCallError] = useState<string | null>(null);
@@ -581,7 +481,49 @@ export default function CTOCallView() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [replicas, setReplicas] = useState<TavusReplica[]>([]);
   const [selectedReplica, setSelectedReplica] = useState<TavusReplica | null>(null);
+  const [showReplicaSelector, setShowReplicaSelector] = useState(false);
+  const [replicasLoading, setReplicasLoading] = useState(false);
+  const [replicasError, setReplicasError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const displayAgents = useMemo(() => mergeAgentsWithTeamConfig(agents, config), [agents, config]);
+  const routeAgent = useMemo(
+    () => (routeAgentId ? displayAgents.find((agent) => agent.agent_id === routeAgentId) ?? null : null),
+    [displayAgents, routeAgentId],
+  );
+  const isEmployeeCall = Boolean(routeAgentId);
+  const callTarget = useMemo<InternalCallTarget | null>(() => {
+    if (routeAgent) {
+      return {
+        agent_id: routeAgent.agent_id,
+        name: routeAgent.name,
+        role: routeAgent.role,
+        department: routeAgent.department as InternalCallTarget["department"],
+        hierarchy_level: routeAgent.hierarchy_level as InternalCallTarget["hierarchy_level"],
+      };
+    }
+
+    if (config.cto_assignment) {
+      return {
+        agent_id: config.cto_assignment.agent_id,
+        name: selectedReplica?.replica_name ?? config.cto_assignment.replica_name,
+        role: config.cto_assignment.role,
+        department: config.cto_assignment.department,
+        hierarchy_level: config.cto_assignment.hierarchy_level,
+      };
+    }
+
+    if (selectedReplica) {
+      return {
+        agent_id: "cto-01",
+        name: selectedReplica.replica_name,
+        role: "cto",
+        department: "engineering",
+        hierarchy_level: "cto",
+      };
+    }
+
+    return null;
+  }, [config.cto_assignment, routeAgent, selectedReplica]);
 
   const fetchCtx = async () => {
     try {
@@ -591,17 +533,75 @@ export default function CTOCallView() {
   };
 
   useEffect(() => {
+    fetchAgents();
     fetchProjects();
+    fetchConfig();
     fetchCtx();
     pollRef.current = setInterval(fetchCtx, 10_000);
+    setReplicasLoading(true);
+    setReplicasError(null);
     communicationApi.replicas().then((res) => {
       setReplicas(res.data.replicas ?? []);
-    }).catch(() => {});
+    }).catch(() => {
+      setReplicas([]);
+      setReplicasError("Tavus replicas could not be loaded. The default CTO face is still available.");
+    }).finally(() => {
+      setReplicasLoading(false);
+    });
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchAgents, fetchConfig, fetchProjects]);
+
+  useEffect(() => {
+    if (!routeReplicaId || replicas.length === 0) {
+      return;
+    }
+
+    const matchedReplica = replicas.find((replica) => replica.replica_id === routeReplicaId);
+    if (matchedReplica) {
+      setSelectedReplica(matchedReplica);
+    }
+  }, [replicas, routeReplicaId]);
+
+  useEffect(() => {
+    if (routeReplicaId || replicas.length === 0 || selectedReplica) {
+      return;
+    }
+
+    if (config.cto_assignment?.replica_id) {
+      const matchedReplica = replicas.find((replica) => replica.replica_id === config.cto_assignment?.replica_id);
+      if (matchedReplica) {
+        setSelectedReplica(matchedReplica);
+      }
+    }
+  }, [config.cto_assignment?.replica_id, replicas, routeReplicaId, selectedReplica]);
+
+  useEffect(() => {
+    if (isEmployeeCall || !selectedReplica) return;
+
+    void patchCtoAssignment(
+      selectedReplica
+        ? {
+            agent_id: "cto-01",
+            archetype_agent_id: "cto-01",
+            replica_id: selectedReplica.replica_id,
+            replica_name: selectedReplica.replica_name,
+            model_name: selectedReplica.model_name,
+            poster_image_url: selectedReplica.poster_image_url ?? null,
+            thumbnail_video_url: selectedReplica.thumbnail_video_url,
+            department: "engineering",
+            role: "cto",
+            hierarchy_level: "cto",
+            parent_agent_id: null,
+          }
+        : null,
+    );
+  }, [isEmployeeCall, patchCtoAssignment, selectedReplica]);
 
   const beginInterview = async () => {
+    if (!selectedReplica || (isEmployeeCall && !callTarget)) {
+      return;
+    }
     setLoading(true);
     setCallError(null);
     try {
@@ -611,6 +611,7 @@ export default function CTOCallView() {
           ? `Escalation call — project: ${currentProject.name}`
           : "New project kickoff — interview me about what I want to build",
         replica_id: selectedReplica?.replica_id ?? null,
+        target: callTarget,
       });
       setCallUrl(res.data.conversation_url);
     } catch (err: unknown) {
@@ -746,6 +747,12 @@ export default function CTOCallView() {
         replicas={replicas}
         selectedReplica={selectedReplica}
         setSelectedReplica={setSelectedReplica}
+        showReplicaSelector={showReplicaSelector}
+        setShowReplicaSelector={setShowReplicaSelector}
+        replicasLoading={replicasLoading}
+        replicasError={replicasError}
+        callTarget={callTarget}
+        isEmployeeCall={isEmployeeCall}
       />
       {showCreateModal && (
         <CreateProjectModal

@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     tavus_persona_id: str = ""
     tavus_customer_replica_id: str = ""
     tavus_customer_persona_id: str = ""
+    replica_assets_cdn_base_url: str = ""
 
     # User feedback fan-out (Slack, Zapier, or internal worker)
     feedback_webhook_url: str = ""

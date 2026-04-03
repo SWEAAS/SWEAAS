@@ -3,15 +3,20 @@
 import logging
 from contextlib import asynccontextmanager
 
-import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.middleware.auth_enforcement import AuthEnforcementMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
-
 logger = logging.getLogger(__name__)
+try:
+    import sentry_sdk
+except ImportError:  # pragma: no cover - optional in local dev/test environments
+    sentry_sdk = None
+
+
+
 settings = get_settings()
 
 if settings.auth_enforce_jwt and not settings.supabase_url.strip():
@@ -20,7 +25,7 @@ if settings.auth_enforce_jwt and not settings.supabase_url.strip():
     )
 
 # ── Sentry ───────────────────────────────────────────────────────
-if settings.sentry_dsn:
+if sentry_sdk is not None and settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         traces_sample_rate=0.2 if settings.environment == "production" else 1.0,
@@ -45,7 +50,12 @@ async def _ensure_dev_user() -> None:
             result = await session.execute(
                 select(User).where(User.supabase_uid == "dev-user")
             )
-            if result.scalar_one_or_none() is not None:
+            existing_user = result.scalar_one_or_none()
+            if existing_user is not None:
+                existing_user.email = "user@sweaas.dev"
+                existing_user.full_name = "Dev User"
+                existing_user.role = "owner"
+                await session.commit()
                 return
 
             org = Organization(name="SWEAAS Dev", slug="sweaas-dev")
@@ -55,7 +65,7 @@ async def _ensure_dev_user() -> None:
             user = User(
                 id=uuid.uuid4(),
                 supabase_uid="dev-user",
-                email="dev@sweaas.dev",
+                email="user@sweaas.dev",
                 full_name="Dev User",
                 organization_id=org.id,
                 role="owner",

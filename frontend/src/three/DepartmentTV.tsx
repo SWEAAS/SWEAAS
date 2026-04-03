@@ -7,7 +7,7 @@
  * name + current_focus line using Html overlay (so real text renders sharp).
  */
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";

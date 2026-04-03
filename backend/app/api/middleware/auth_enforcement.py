@@ -77,4 +77,6 @@ def _is_allowlisted_api_route(method: str, path: str, api_prefix: str) -> bool:
         return True
     if normalized == f"{api_prefix.rstrip('/')}/communication/customer-call/public" and method == "POST":
         return True
+    if normalized.startswith(f"{api_prefix.rstrip('/')}/communication/replica-posters/") and method in ("GET", "HEAD"):
+        return True
     return False
