@@ -19,7 +19,7 @@ const navItems = [
   { to: "/org-chart",  icon: GitBranch,       label: "Org Chart" },
   { to: "/budget",     icon: CreditCard,      label: "Budget" },
   { to: "/reports",    icon: BarChart3,       label: "Reports" },
-  { to: "/cto-call",   icon: Video,           label: "CTO Call" },
+  { to: "/cto-call",   icon: Video,           label: "Cto Call" },
   { to: "/settings",   icon: Settings,        label: "Settings" },
 ];
 

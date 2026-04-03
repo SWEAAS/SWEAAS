@@ -1,5 +1,6 @@
 import { Building2, ChevronRight, MessageSquare, Phone } from "lucide-react";
 import type { Agent } from "../../../store/agentStore";
+import AgentStatusBadge from "../../ui/AgentStatusBadge";
 
 type ActionKind = "chat" | "video" | "hq";
 const BASE_CARD_WIDTH = 397;
@@ -119,7 +120,9 @@ export default function ProfileCard({
           </div>
           <div className="rounded-[18px] bg-[#f6f3fb] px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#7a7390]">Status</p>
-            <p className="mt-1.5 text-xs font-medium text-[#1f1638]">{formatLabel(agent.status)}</p>
+            <div className="mt-1.5">
+              <AgentStatusBadge status={agent.status} size="compact" />
+            </div>
           </div>
         </div>
 

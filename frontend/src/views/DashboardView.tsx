@@ -60,6 +60,7 @@ export default function DashboardView() {
   const runningTasks = displayAgents
     .flatMap((a) => (a as unknown as { recent_activity?: { state: string }[] }).recent_activity ?? [])
     .filter((act) => act.state === "running").length;
+  const agentPreview = displayAgents.slice(0, 9);
 
   const stats = [
     { label: "Total Agents",  value: displayAgents.length,   icon: Users,          color: "text-[var(--brand)]",  bg: "bg-[var(--brand-surface)]" },
@@ -77,27 +78,27 @@ export default function DashboardView() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[28px] border border-[#e7e0f6] bg-[linear-gradient(135deg,#1f1638_0%,#3e2c72_55%,#7c5cff_100%)] p-6 text-white shadow-[0_24px_70px_-50px_rgba(42,26,92,0.45)]">
+      <section className="overflow-hidden rounded-[28px] border border-[#e7e0f6] bg-[linear-gradient(180deg,#ffffff_0%,#faf8fe_100%)] p-6 shadow-[0_24px_70px_-54px_rgba(42,26,92,0.22)]">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/88 backdrop-blur">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-[var(--brand-surface)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand)]">
               <Sparkles size={12} />
               {config.completed ? "Team configured" : "Onboarding"}
             </div>
-            <h2 className="text-2xl font-semibold tracking-tight">
+            <h2 className="text-2xl font-semibold tracking-tight text-[#1f1638]">
               {config.completed ? "Your team is onboarded" : "Onboard your team"}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#675f7e]">
               {config.completed
-                ? `${config.company_size || "Your"} employees, $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget, and ${displayAgents.length} configured AI teammates are now driving the org chart and CTO surfaces.`
-                : "Answer a few questions, assign your Tavus personas once, and we’ll populate the org chart, CTO face, and employee roster across the product."}
+                ? `${config.company_size || "Your"} employees, $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget, and ${displayAgents.length} configured AI teammates are now driving the org chart and Cto surfaces.`
+                : "Answer a few questions, assign your Tavus personas once, and we’ll populate the org chart, Cto face, and employee roster across the product."}
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => navigate("/onboarding")}
-            className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/20 bg-white px-5 py-3 text-[14px] font-semibold text-[#1f1638] transition-transform hover:-translate-y-0.5"
+            className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-[var(--brand-border)] bg-white px-5 py-3 text-[14px] font-semibold text-[#1f1638] transition-transform hover:-translate-y-0.5 hover:bg-[var(--brand-surface)]"
           >
             {config.completed ? "Edit onboarding" : "Onboard your team"}
             <ArrowRight size={15} />
@@ -198,10 +199,20 @@ export default function DashboardView() {
         <div className="mb-4 flex items-center gap-2">
           <Users size={15} className="text-[#675f7e]" />
           <h3 className="text-[15px] font-semibold text-[#1f1638]">Agent Directory</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">{displayAgents.length} agents</span>
+          <span className="ml-auto text-[11px] text-[#7a7390]">
+            Top {agentPreview.length} of {displayAgents.length} agents
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/agents")}
+            className="inline-flex items-center gap-2 rounded-[12px] border border-[#e5def2] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#4d4761] transition-colors hover:bg-[#faf8fd]"
+          >
+            View All Agents
+            <ArrowRight size={14} />
+          </button>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          {displayAgents.map((agent) => (
+          {agentPreview.map((agent) => (
             <AgentCard key={agent.agent_id} agent={agent} />
           ))}
         </div>

@@ -26,7 +26,7 @@ export default function CTOReplicaDirectoryView() {
           return;
         }
 
-        setError("Could not load the full CTO directory right now.");
+        setError("Could not load the full Cto directory right now.");
       })
       .finally(() => {
         if (isMounted) {

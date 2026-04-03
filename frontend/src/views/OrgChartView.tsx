@@ -17,6 +17,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { agentApi } from "../api/client";
 import ProfileCardV3 from "../components/org-chart/v3/ProfileCardV3";
+import AgentStatusBadge from "../components/ui/AgentStatusBadge";
 import { useAuthStore } from "../store/authStore";
 import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import AgentChatPanel from "../three/ui/AgentChatPanel";
@@ -91,6 +92,18 @@ function getInitials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+function hashSeed(value: string) {
+  return value.split("").reduce((total, char) => total + char.charCodeAt(0), 0);
+}
+
+function portraitUrlForAgent(agent: Pick<Agent, "agent_id" | "poster_image_url">) {
+  if (agent.poster_image_url) {
+    return agent.poster_image_url;
+  }
+  const seed = (hashSeed(agent.agent_id) % 70) + 1;
+  return `https://i.pravatar.cc/480?img=${seed}`;
 }
 
 function usagePercent(agent: Agent) {
@@ -209,6 +222,41 @@ function rowHeading(levelIndex: number, path: string[], agentMap: Map<string, Ag
 
   if (!parent) return "Expanded team";
   return `Reporting to ${parent.name}`;
+}
+
+function ProfileDrawerHeroImage({
+  agent,
+}: {
+  agent: Pick<AgentDetail, "agent_id" | "poster_image_url" | "name" | "hierarchy_level" | "department">;
+}) {
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const portraitUrl = portraitUrlForAgent(agent);
+
+  const accent = (departmentStyles[agent.department] ?? departmentStyles.engineering).accent;
+  const initialsBackground =
+    agent.hierarchy_level === "cto"
+      ? "linear-gradient(135deg,#7c5cff,#b6a1ff)"
+      : `linear-gradient(135deg,${accent},color-mix(in srgb,${accent} 62%, white 38%))`;
+
+  return (
+    <div
+      className="relative flex aspect-square items-center justify-center overflow-hidden rounded-[24px] text-6xl font-semibold text-white"
+      style={{
+        background: mediaFailed ? initialsBackground : "#dfe9f7",
+      }}
+    >
+      {!mediaFailed ? (
+        <img
+          src={portraitUrl}
+          alt={agent.name}
+          className="h-full w-full object-cover"
+          onError={() => setMediaFailed(true)}
+        />
+      ) : (
+        getInitials(agent.name)
+      )}
+    </div>
+  );
 }
 
 export default function OrgChartView() {
@@ -538,24 +586,13 @@ export default function OrgChartView() {
                             }14 0%,#ffffff 100%)`,
                     }}
                   >
-                    <div
-                      className="flex aspect-square items-center justify-center rounded-[24px] text-6xl font-semibold text-white"
-                      style={{
-                        background:
-                          profileAgent.hierarchy_level === "cto"
-                            ? "linear-gradient(135deg,#7c5cff,#b6a1ff)"
-                            : `linear-gradient(135deg,${
-                                (departmentStyles[profileAgent.department] ?? departmentStyles.engineering).accent
-                              },color-mix(in srgb,${
-                                (departmentStyles[profileAgent.department] ?? departmentStyles.engineering).accent
-                              } 62%, white 38%))`,
-                      }}
-                    >
-                      {getInitials(profileAgent.name)}
-                    </div>
+                    <ProfileDrawerHeroImage
+                      key={`${profileAgent.agent_id}-${profileAgent.poster_image_url ?? ""}`}
+                      agent={profileAgent}
+                    />
 
                     <div className="mt-4 flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-[30px] font-semibold tracking-tight text-[#1f1638]">
                           {profileAgent.name}
                         </h3>
@@ -563,9 +600,12 @@ export default function OrgChartView() {
                         {profileAgent.pronouns ? (
                           <p className="mt-1 text-sm text-[#7a7390]">{profileAgent.pronouns}</p>
                         ) : null}
+                        <div className="mt-3">
+                          <AgentStatusBadge status={profileAgent.status} />
+                        </div>
                       </div>
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${
                           (departmentStyles[profileAgent.department] ?? departmentStyles.engineering).chip
                         }`}
                       >

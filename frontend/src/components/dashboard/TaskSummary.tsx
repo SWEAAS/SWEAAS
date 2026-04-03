@@ -1,7 +1,7 @@
 const tasks = [
   { id: 1, title: "Implement onboarding wizard UI",               agent: "Frontend Developer", status: "running" },
   { id: 2, title: "Project API endpoint with GitHub integration", agent: "Backend Architect",  status: "running" },
-  { id: 3, title: "Sprint planning delegation",                   agent: "CTO Agent",           status: "completed" },
+  { id: 3, title: "Sprint planning delegation",                   agent: "Cto Agent",           status: "completed" },
   { id: 4, title: "Q1 Campaign ROI analysis",                     agent: "Marketing Manager",  status: "running" },
   { id: 5, title: "Set up Docker Compose and CI pipeline",        agent: "DevOps Automator",   status: "queued" },
 ];

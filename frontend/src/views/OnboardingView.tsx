@@ -49,7 +49,7 @@ export default function OnboardingView() {
   const steps: { key: Step; label: string; icon: typeof Building2 }[] = [
     { key: "company", label: "Company", icon: Building2 },
     { key: "departments", label: "Departments", icon: Users },
-    { key: "cto", label: "CTO", icon: Phone },
+    { key: "cto", label: "Cto", icon: Phone },
     { key: "review", label: "Review", icon: CheckCircle },
   ];
 
@@ -234,7 +234,7 @@ export default function OnboardingView() {
                   className={inputClass}
                 />
                 <p className="mt-1 text-[11px] text-[#7a7390]">
-                  This is the total number of AI agents in your organization, including the CTO. The hard max is {MAX_ORG_SIZE.toLocaleString()}.
+                  This is the total number of AI agents in your organization, including the Cto. The hard max is {MAX_ORG_SIZE.toLocaleString()}.
                 </p>
               </div>
               <div>
@@ -277,7 +277,7 @@ export default function OnboardingView() {
             <div>
               <h3 className="text-[18px] font-semibold text-[#1f1638]">Department sizes</h3>
               <p className="mt-1 text-[13px] text-[#675f7e]">
-                Split your non-CTO headcount across departments. We will generate a hierarchical roster from these counts, then reuse personas silently with alphabetic suffixes once the unique face pool is exhausted.
+                Split your non-Cto headcount across departments. We will generate a hierarchical roster from these counts, then reuse personas silently with alphabetic suffixes once the unique face pool is exhausted.
               </p>
             </div>
 
@@ -312,7 +312,7 @@ export default function OnboardingView() {
               <div className="rounded-[18px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-4">
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[#7a7390]">
                   <Users size={14} />
-                  Non-CTO headcount
+                  Non-Cto headcount
                 </div>
                 <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{nonCtoHeadcount}</p>
               </div>
@@ -345,9 +345,9 @@ export default function OnboardingView() {
         {step === "cto" ? (
           <div className="space-y-6">
             <div>
-              <h3 className="text-[18px] font-semibold text-[#1f1638]">Choose your CTO face</h3>
+              <h3 className="text-[18px] font-semibold text-[#1f1638]">Choose your Cto face</h3>
               <p className="mt-1 text-[13px] text-[#675f7e]">
-                This face becomes the default CTO identity. In very large orgs, the same underlying Tavus persona may still be reused elsewhere with suffix-based display names.
+                This face becomes the default Cto identity. In very large orgs, the same underlying Tavus persona may still be reused elsewhere with suffix-based display names.
               </p>
             </div>
 
@@ -395,7 +395,7 @@ export default function OnboardingView() {
                         <p className="mt-1 text-[12px] text-[#675f7e]">{replica.model_name}</p>
                         {selected ? (
                           <span className="mt-3 inline-flex rounded-full bg-[var(--brand-chip)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--brand)]">
-                            Selected CTO
+                            Selected Cto
                           </span>
                         ) : null}
                       </div>
@@ -439,12 +439,12 @@ export default function OnboardingView() {
                 </div>
 
                 <div className="mt-5 rounded-[18px] border border-[#ece7f5] bg-white px-4 py-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a7390]">CTO</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a7390]">Cto</p>
                   <p className="mt-2 text-[16px] font-semibold text-[#1f1638]">
-                    {selectedCtoReplica?.replica_name ?? "No CTO selected"}
+                    {selectedCtoReplica?.replica_name ?? "No Cto selected"}
                   </p>
                   <p className="mt-1 text-[12px] text-[#675f7e]">
-                    This face becomes the default on the CTO call page.
+                    This face becomes the default on the Cto call page.
                   </p>
                 </div>
               </div>
@@ -454,7 +454,7 @@ export default function OnboardingView() {
                   Assigned personas
                 </p>
                 <p className="mt-2 text-[12px] text-[#7a7390]">
-                  Showing {previewAssignments.length} of {recommendation.assignments.length} non-CTO assignments.
+                  Showing {previewAssignments.length} of {recommendation.assignments.length} non-Cto assignments.
                 </p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {previewAssignments.map((assignment) => {

@@ -11,6 +11,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import { communicationApi, projectApi } from "../api/client";
 import CTOReplicaSelector from "../components/cto-page/CTOReplicaSelector";
+import AgentStatusBadge from "../components/ui/AgentStatusBadge";
 import type { TavusReplica } from "../components/cto-page/types";
 import { useAgentStore } from "../store/agentStore";
 import { useProjectStore } from "../store/projectStore";
@@ -51,13 +52,6 @@ const deptAccent: Record<string, string> = {
   marketing:   "#D97706",
   product:     "#7C3AED",
   support:     "#059669",
-};
-
-const statusDot: Record<string, string> = {
-  active:  "#059669",
-  warning: "#D97706",
-  paused:  "#8A96B0",
-  strike:  "#DC2626",
 };
 
 function formatLabel(value: string) {
@@ -130,7 +124,7 @@ function CallReadyScreen({
     ? `${formatLabel(callTarget.role)} · ${formatLabel(callTarget.department)} · Tavus`
     : selectedReplica
       ? "AI teammate · Tavus"
-      : "AI Chief Technology Officer · Tavus";
+      : "AI CTO · Tavus";
   const introCopy = isEmployeeCall
     ? `${identityName} will join with the shared internal call brain, and the backend will brief Tavus with this person's role, level, and your topic before the call starts.`
     : "Your CTO will interview you about what you want to build — requirements, team structure, budget, and timeline — then stand up your AI engineering team.";
@@ -170,7 +164,7 @@ function CallReadyScreen({
             />
           ) : (
             <span className="font-['Instrument_Serif',Georgia,serif] text-[22px] italic font-normal text-white/90 tracking-[0.02em]">
-              CTO
+              Cto
             </span>
           )}
         </div>
@@ -714,10 +708,7 @@ export default function CTOCallView() {
               <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-[#7a7390] mb-2.5">Agent Burn</p>
               {(ctx?.agents ?? []).map((a) => (
                 <div key={a.agent_id} className="mb-2 flex items-center gap-2">
-                  <div
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ background: statusDot[a.status] ?? "#7a7390" }}
-                  />
+                  <AgentStatusBadge status={a.status} appearance="dot" size="compact" />
                   <span className="w-24 shrink-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-medium text-[#675f7e]">
                     {a.name}
                   </span>

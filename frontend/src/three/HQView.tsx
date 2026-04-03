@@ -1,19 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Phone } from "lucide-react";
 import HQScene from "./HQScene";
 import AgentChatPanel from "./ui/AgentChatPanel";
 import TokenBurnOverlay from "./ui/TokenBurnOverlay";
 import { useAgentStore, type Agent } from "../store/agentStore";
+import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
+import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 
 export default function HQView() {
   const { agents, fetchAgents } = useAgentStore();
+  const { config, fetchConfig } = useTeamOnboardingStore();
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+  const [cameraMode, setCameraMode] = useState<"overview" | "walkthrough">("overview");
   const navigate = useNavigate();
 
-  useEffect(() => { fetchAgents(); }, [fetchAgents]);
+  useEffect(() => { fetchAgents(); fetchConfig(); }, [fetchAgents, fetchConfig]);
 
-  const warningCount = agents.filter((a) => a.status === "warning").length;
+  const displayAgents = useMemo(
+    () => mergeAgentsWithTeamConfig(agents, config),
+    [agents, config],
+  );
+
+  const warningCount = displayAgents.filter((a) => a.status === "warning").length;
 
   return (
     <div className="relative w-full" style={{ height: "calc(100vh - 60px)" }}>
@@ -35,8 +44,51 @@ export default function HQView() {
       >
         <p style={{ fontSize: 11, color: "#4D5E80", margin: 0, lineHeight: 1.7, fontWeight: 500 }}>
           <span style={{ color: "#1B47D6", fontWeight: 700 }}>Controls:</span>{" "}
-          WASD · Q/E up/down · Mouse to rotate · Click agent to chat
+          {cameraMode === "overview"
+            ? "Mouse to orbit · Scroll to zoom · Switch to walkthrough to enter the building"
+            : "Click scene to lock mouse · WASD move · Q/E up/down · Esc unlock"}
         </p>
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 64,
+          right: 16,
+          zIndex: 40,
+          display: "flex",
+          gap: 8,
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          border: "1px solid rgba(226,232,244,0.9)",
+          borderRadius: 12,
+          padding: 6,
+          boxShadow: "0 4px 16px rgba(12,21,38,0.07)",
+        }}
+      >
+        {(["overview", "walkthrough"] as const).map((mode) => {
+          const active = cameraMode === mode;
+          return (
+            <button
+              key={mode}
+              onClick={() => setCameraMode(mode)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid rgba(195,208,248,0.9)",
+                background: active ? "#1B47D6" : "rgba(255,255,255,0.9)",
+                color: active ? "#fff" : "#1B47D6",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {mode === "overview" ? "Overview" : "Walkthrough"}
+            </button>
+          );
+        })}
       </div>
 
       {/* Call CTO — pulsing rings */}
@@ -98,7 +150,7 @@ export default function HQView() {
           onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
         >
           <Phone size={14} />
-          Call CTO
+          Call Cto
           {warningCount > 0 && (
             <span
               style={{
@@ -122,9 +174,13 @@ export default function HQView() {
         </button>
       </div>
 
-      <TokenBurnOverlay agents={agents} />
+      <TokenBurnOverlay agents={displayAgents} />
 
-      <HQScene agents={agents} onAgentClick={(agent) => setChatAgent(agent)} />
+      <HQScene
+        agents={displayAgents}
+        onAgentClick={(agent) => setChatAgent(agent)}
+        cameraMode={cameraMode}
+      />
 
       {chatAgent && (
         <AgentChatPanel

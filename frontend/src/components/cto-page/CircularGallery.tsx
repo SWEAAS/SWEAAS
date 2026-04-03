@@ -107,7 +107,7 @@ function createActionPreviewDataUrl(text: string): string {
 
   context.font = '500 46px Plus Jakarta Sans';
   context.fillStyle = 'rgba(255,255,255,0.82)';
-  context.fillText('Open the full CTO directory', canvas.width / 2, canvas.height / 2 + 72);
+  context.fillText('Open the full Cto directory', canvas.width / 2, canvas.height / 2 + 72);
 
   return canvas.toDataURL('image/png');
 }

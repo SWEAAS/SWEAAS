@@ -88,7 +88,7 @@ function ReplicaGridCard({ replica }: { replica: TavusReplica }) {
           {replica.model_name}
         </p>
         <p className="mt-3 text-[12px] font-medium text-[var(--brand)]">
-          Use this face for the CTO interview
+          Use this face for the Cto interview
         </p>
       </div>
     </button>
@@ -129,10 +129,10 @@ export default function CTOReplicaDirectory({
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-white/75 px-3 py-1 text-xs font-medium text-[var(--brand)] backdrop-blur">
               <Sparkles size={12} />
-              Global CTO directory
+              Global Cto directory
             </div>
             <h1 className="m-0 text-[30px] font-semibold tracking-[-0.03em] text-[#1f1638]">
-              All CTO faces
+              All Cto faces
             </h1>
             <p className="mt-2 max-w-[760px] text-[14px] leading-[1.7] text-[#675f7e]">
               Pick from the full replica library in the same Slack-inspired UI language as the rest

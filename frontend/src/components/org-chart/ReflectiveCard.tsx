@@ -1,6 +1,7 @@
 import type { CSSProperties, KeyboardEvent } from "react";
 import { Activity, Fingerprint, Lock, Sparkles } from "lucide-react";
 import type { Agent } from "../../store/agentStore";
+import AgentStatusBadge from "../ui/AgentStatusBadge";
 import "./ReflectiveCard.css";
 
 interface ReflectiveCardProps {
@@ -172,7 +173,7 @@ export default function ReflectiveCard({
             <span>{departmentLabel}</span>
           </div>
           <div className="status-cluster">
-            <span className={`status-pill status-pill-${agent.status}`}>{formatLabel(agent.status)}</span>
+            <AgentStatusBadge status={agent.status} size="compact" variant="onDark" />
             <Activity className="status-icon" size={18} />
           </div>
         </div>

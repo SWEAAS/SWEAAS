@@ -157,8 +157,7 @@
   padding-top: 18px;
 }
 
-.security-badge,
-.status-pill {
+.security-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -176,19 +175,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.status-pill-active {
-  color: #adffd2;
-}
-
-.status-pill-warning {
-  color: #ffe39f;
-}
-
-.status-pill-paused,
-.status-pill-strike {
-  color: #ffd2d9;
 }
 
 .status-icon,

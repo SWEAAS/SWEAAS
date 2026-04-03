@@ -267,7 +267,7 @@ export default function SettingsView() {
 
       {!currentProject && (
         <div className="rounded-[16px] border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-700">
-          No project selected. Create a project first via the CTO Call page.
+          No project selected. Create a project first via the Cto Call page.
         </div>
       )}
 

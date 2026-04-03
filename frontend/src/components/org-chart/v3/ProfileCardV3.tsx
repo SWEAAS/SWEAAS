@@ -1,6 +1,7 @@
 import { Video, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Agent } from "../../../store/agentStore";
+import AgentStatusBadge from "../../ui/AgentStatusBadge";
 
 interface ProfileCardV3Props {
   agent: Agent;
@@ -108,6 +109,13 @@ export default function ProfileCardV3({
           >
             {formatLabel(agent.role)}
           </p>
+          <div className="mt-3">
+            <AgentStatusBadge
+              status={agent.status}
+              size="compact"
+              variant={selected ? "onDark" : "default"}
+            />
+          </div>
           {onVideoCall ? (
             <button
               type="button"

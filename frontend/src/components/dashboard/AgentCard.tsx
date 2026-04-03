@@ -1,11 +1,5 @@
 import type { Agent } from "../../store/agentStore";
-
-const statusConfig: Record<string, { dot: string; label: string; bg: string; text: string }> = {
-  active:  { dot: "#059669", label: "Active",  bg: "#ECFDF5", text: "#059669" },
-  warning: { dot: "#D97706", label: "Warning", bg: "#FFFBEB", text: "#D97706" },
-  paused:  { dot: "#7a7390", label: "Paused",  bg: "#f8f6fc", text: "#7a7390" },
-  strike:  { dot: "#DC2626", label: "Strike",  bg: "#FEF2F2", text: "#DC2626" },
-};
+import AgentStatusBadge from "../ui/AgentStatusBadge";
 
 const deptColor: Record<string, string> = {
   engineering: "var(--brand)",
@@ -20,7 +14,6 @@ interface AgentCardProps {
 }
 
 export default function AgentCard({ agent, onClick }: AgentCardProps) {
-  const status = statusConfig[agent.status] ?? statusConfig.active;
   const pct = Math.round((agent.tokens_used_today / agent.daily_token_budget) * 100);
   const accent = deptColor[agent.department] ?? "var(--brand)";
 
@@ -61,15 +54,7 @@ export default function AgentCard({ agent, onClick }: AgentCardProps) {
           </div>
         </div>
 
-        <div
-          className="flex items-center gap-1.5 shrink-0 ml-2.5 rounded-full px-2.5 py-1"
-          style={{ background: status.bg }}
-        >
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: status.dot }} />
-          <span className="text-[11px] font-semibold" style={{ color: status.text }}>
-            {status.label}
-          </span>
-        </div>
+        <AgentStatusBadge status={agent.status} className="ml-2.5 shrink-0" />
       </div>
 
       {/* Token usage */}

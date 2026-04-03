@@ -6,8 +6,10 @@ import CTOReplicaDirectoryView from "./views/CTOReplicaDirectoryView";
 import CustomerCallPreview from "./views/CustomerCallPreview";
 import DashboardView from "./views/DashboardView";
 import LoginView from "./views/LoginView";
+import AgentDirectoryView from "./views/AgentDirectoryView";
 import OnboardingView from "./views/OnboardingView";
 import OrgChartView from "./views/OrgChartView";
+import ReportsView from "./views/ReportsView";
 import SettingsView from "./views/SettingsView";
 import { lazy, Suspense } from "react";
 
@@ -48,10 +50,10 @@ export default function App() {
               </Suspense>
             }
           />
-          <Route path="/agents" element={<DashboardView />} />
+          <Route path="/agents" element={<AgentDirectoryView />} />
           <Route path="/org-chart" element={<OrgChartView />} />
           <Route path="/budget" element={<DashboardView />} />
-          <Route path="/reports" element={<DashboardView />} />
+          <Route path="/reports" element={<ReportsView />} />
           <Route path="/cto-call" element={<CTOCallView />} />
           <Route path="/cto-call/all" element={<CTOReplicaDirectoryView />} />
           <Route path="/customer-support" element={<CustomerCallPreview />} />

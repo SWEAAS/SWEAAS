@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 import { agentApi } from "../../api/client";
 import type { Agent } from "../../store/agentStore";
+import AgentStatusBadge from "../../components/ui/AgentStatusBadge";
 
 interface AgentChatPanelProps {
   agent: Agent;
@@ -57,11 +58,15 @@ export default function AgentChatPanel({ agent, onClose }: AgentChatPanelProps) 
     <div className="fixed bottom-4 right-4 w-96 bg-white rounded-2xl shadow-2xl border border-sweaas-border flex flex-col overflow-hidden z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-sweaas-blue text-white">
-        <div>
+        <div className="min-w-0 flex-1 pr-2">
           <p className="font-medium text-sm">{agent.name}</p>
-          <p className="text-xs text-blue-200">
-            {agent.role.replace(/_/g, " ")} · {agent.status}
-          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-blue-200">
+            <span>{agent.role.replace(/_/g, " ")}</span>
+            <span className="text-blue-300/80" aria-hidden>
+              ·
+            </span>
+            <AgentStatusBadge status={agent.status} size="compact" variant="onDark" />
+          </div>
         </div>
         <button
           onClick={onClose}

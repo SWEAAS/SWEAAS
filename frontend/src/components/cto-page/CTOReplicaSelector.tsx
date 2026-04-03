@@ -56,7 +56,7 @@ export default function CTOReplicaSelector({
           Featured Tavus faces
         </div>
         <div className="rounded-[22px] border border-[#ece7f5] bg-white/88 px-4 py-6 text-[13px] text-[#675f7e] backdrop-blur">
-          Loading Tavus replicas for the CTO picker...
+          Loading Tavus replicas for the Cto picker...
         </div>
       </section>
     );
@@ -73,7 +73,7 @@ export default function CTOReplicaSelector({
           <p className="m-0 text-[14px] font-semibold text-[#1f1638]">Replica picker unavailable</p>
           <p className="m-0 text-[13px] leading-[1.6] text-[#675f7e]">
             {error ??
-              "We could not load Tavus replicas right now. You can still continue with the default CTO face while the replica library is unavailable."}
+              "We could not load Tavus replicas right now. You can still continue with the default Cto face while the replica library is unavailable."}
           </p>
           <button
             onClick={() => onSelect(null)}
@@ -98,7 +98,7 @@ export default function CTOReplicaSelector({
             Browse fast, open the full directory only when you need it
           </h2>
           <p className="mt-2 max-w-[640px] text-[13px] leading-[1.6] text-[#675f7e]">
-            The call page now keeps only a curated set of CTO faces live here for speed.
+            The call page now keeps only a curated set of Cto faces live here for speed.
             We serve local poster images immediately, then only upgrade the centered card to live Tavus video.
           </p>
         </div>
@@ -108,7 +108,7 @@ export default function CTOReplicaSelector({
             onClick={() => {
               setFocusedItem({
                 id: "default-face",
-                text: "Default CTO",
+                text: "Default Cto",
                 kind: "action",
               });
               onSelect(null);
@@ -167,7 +167,7 @@ export default function CTOReplicaSelector({
             Selected face
           </p>
           <p className="mt-1 text-[16px] font-semibold text-[#1f1638]">
-            {selectedReplica?.replica_name ?? "Default CTO"}
+            {selectedReplica?.replica_name ?? "Default Cto"}
           </p>
           <p className="mt-1 text-[12px] text-[#675f7e]">
             {selectedReplica
@@ -182,7 +182,7 @@ export default function CTOReplicaSelector({
               to="/cto-call/all"
               className="rounded-full border border-[var(--brand-border)] bg-[var(--brand-chip)] px-3.5 py-2 text-[12px] font-semibold text-[var(--brand)] no-underline transition-colors hover:bg-[var(--brand-surface)]"
             >
-              Open full CTO directory
+              Open full Cto directory
             </Link>
           )}
           <span className="rounded-full border border-[#ece7f5] bg-[#f8f6fc] px-3 py-1.5 text-[11px] font-medium text-[#7a7390]">

@@ -104,7 +104,7 @@ export const useTeamOnboardingStore = create<TeamOnboardingState>((set) => ({
       });
       set({ config: response.data, error: null });
     } catch {
-      set({ error: "Could not save the CTO face selection." });
+      set({ error: "Could not save the Cto face selection." });
     }
   },
 }));

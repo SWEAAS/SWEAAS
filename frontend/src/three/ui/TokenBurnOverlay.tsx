@@ -1,13 +1,7 @@
 import type { Agent } from "../../store/agentStore";
+import AgentStatusBadge from "../../components/ui/AgentStatusBadge";
 
 interface Props { agents: Agent[]; }
-
-const statusDot: Record<string, string> = {
-  active:  "#059669",
-  warning: "#D97706",
-  paused:  "#8A96B0",
-  strike:  "#DC2626",
-};
 
 export default function TokenBurnOverlay({ agents }: Props) {
   const totalBudget = agents.reduce((s, a) => s + a.daily_token_budget, 0);
@@ -74,15 +68,7 @@ export default function TokenBurnOverlay({ agents }: Props) {
           const p = Math.round((a.tokens_used_today / a.daily_token_budget) * 100);
           return (
             <div key={a.agent_id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: statusDot[a.status] ?? "#8A96B0",
-                  flexShrink: 0,
-                }}
-              />
+              <AgentStatusBadge status={a.status} appearance="dot" size="compact" />
               <span
                 style={{
                   fontSize: 11,

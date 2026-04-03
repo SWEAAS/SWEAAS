@@ -1,184 +1,310 @@
+import { useMemo } from "react";
 import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment, Sky } from "@react-three/drei";
-import Building from "./Building";
+import {
+  ContactShadows,
+  Environment,
+  Lightformer,
+  OrbitControls,
+  Sky,
+} from "@react-three/drei";
+import Building, {
+  BUILDING_DEPTH,
+  FLOOR_HEIGHT,
+  type DepartmentFloor,
+} from "./Building";
 import Floor from "./Floor";
 import AgentAvatar from "./AgentAvatar";
+import AgentOffice from "./AgentOffice";
+import CTOOffice from "./CTOOffice";
 import Staircase from "./Staircase";
 import DepartmentTV from "./DepartmentTV";
+import CityBuildings from "./CityBuildings";
+import FloatingPlatform from "./FloatingPlatform";
 import ExplorationControls from "./controls/ExplorationControls";
 import { useProjectStore } from "../store/projectStore";
 import type { Agent } from "../store/agentStore";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 
-/** x positions of the 4 desk columns (matches Building Workstation positions). */
-const DESK_X = [-3.5, -1.5, 0.5, 2.5] as const;
-/** z positions per desk row (back to front, matches Building DESK_ROW_Z). */
-const DESK_ROW_Z = [-0.8, -2.6, -3.5] as const;
-/** Maximum agents that fit inside (3 rows × 4 desks). */
-const MAX_INSIDE = 12;
+const PLATFORM_Y = 24;
+const BUILDING_BASE_Y = PLATFORM_Y + 0.1;
+const OFFICES_PER_ROW = 4;
+const OFFICE_SPACING_X = 2.8;
+const OFFICE_SPACING_Z = 3.2;
 
-// Root Y so hips (root+0.88) rest on chair seat top (fi*4 + 0.465)
-const SEAT_ROOT_Y = (fi: number) => fi * 4 - 0.415;
-
-// Root Y for standing on the floor surface (fi*4 + 0.025)
-const STAND_ROOT_Y = (fi: number) => fi * 4 + 0.025;
-
-function engDeskPos(idx: number, fi: number): [number, number, number] {
-  const col = idx % 4;
-  const row = Math.floor(idx / 4);
-  const deskZ = DESK_ROW_Z[Math.min(row, 2)];
-  // Chair seat is at z+0.52 within the workstation group; character sits there
-  return [DESK_X[col], SEAT_ROOT_Y(fi), deskZ + 0.52];
-}
-
-function outsidePos(idx: number): [number, number, number] {
-  const col = idx % 3;
-  const row = Math.floor(idx / 3);
-  return [-9 + col * 2.5, STAND_ROOT_Y(0), 2 - row * 3];
-}
-
-// ─── Floor definitions ───────────────────────────────────────────────────────
-
-const FLOORS = [
-  { dept: "engineering", color: "#dbeafe", label: "Engineering" },
-  { dept: "marketing",   color: "#fef3c7", label: "Marketing"   },
-  { dept: "product",     color: "#d1fae5", label: "Product"     },
+const ALL_DEPARTMENTS = [
+  { dept: "engineering", color: "#dbeafe", glassColor: "#93c5fd", label: "Engineering" },
+  { dept: "marketing",   color: "#fef3c7", glassColor: "#fcd34d", label: "Marketing"   },
+  { dept: "product",     color: "#d1fae5", glassColor: "#6ee7b7", label: "Product"     },
+  { dept: "support",     color: "#ede9fe", glassColor: "#c4b5fd", label: "Support"     },
 ] as const;
+
+function officeGridPos(index: number, floorBaseY: number): [number, number, number] {
+  const col = index % OFFICES_PER_ROW;
+  const row = Math.floor(index / OFFICES_PER_ROW);
+  return [
+    -4.2 + col * OFFICE_SPACING_X,
+    floorBaseY + 0.05,
+    -1.5 + row * OFFICE_SPACING_Z,
+  ];
+}
+
+const SEAT_ROOT_Y = (fi: number) => fi * FLOOR_HEIGHT - 0.415;
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface HQSceneProps {
   agents: Agent[];
   onAgentClick: (agent: Agent) => void;
+  cameraMode: "overview" | "walkthrough";
 }
 
 // ─── Scene ───────────────────────────────────────────────────────────────────
 
-export default function HQScene({ agents, onAgentClick }: HQSceneProps) {
+export default function HQScene({
+  agents,
+  onAgentClick,
+  cameraMode,
+}: HQSceneProps) {
   const companyName =
     useProjectStore((s) => s.currentProject?.name) ?? "SWEAAS HQ";
 
-  const engineeringAgents = agents.filter((a) => a.department === "engineering");
-  const marketingAgents   = agents.filter((a) => a.department === "marketing");
-  const productAgents     = agents.filter((a) => a.department === "product");
+  const ctoAgent = useMemo(
+    () => agents.find((agent) => agent.role === "cto") ?? null,
+    [agents],
+  );
 
-  // Engineering desk rows needed (1–3 inside, overflow → outside)
-  const insideEngAgents   = engineeringAgents.slice(0, MAX_INSIDE);
-  const outsideEngAgents  = engineeringAgents.slice(MAX_INSIDE);
-  const engDeskRows       = Math.max(1, Math.min(3, Math.ceil(insideEngAgents.length / 4)));
-  const mktDeskRows       = Math.max(1, Math.min(3, Math.ceil(marketingAgents.length / 4)));
-  const prodDeskRows      = Math.max(1, Math.min(3, Math.ceil(productAgents.length / 4)));
+  const orgFloorAgents = useMemo(
+    () => (ctoAgent ? agents.filter((agent) => agent.agent_id !== ctoAgent.agent_id) : agents),
+    [agents, ctoAgent],
+  );
+
+  const departmentData = useMemo(() => {
+    const byDept = new Map<string, Agent[]>();
+    for (const a of orgFloorAgents) {
+      const list = byDept.get(a.department) ?? [];
+      list.push(a);
+      byDept.set(a.department, list);
+    }
+
+    const floors: { meta: typeof ALL_DEPARTMENTS[number]; agents: Agent[] }[] = [];
+    for (const meta of ALL_DEPARTMENTS) {
+      const deptAgents = byDept.get(meta.dept) ?? [];
+      if (deptAgents.length > 0) {
+        floors.push({ meta, agents: deptAgents });
+      }
+    }
+    return floors;
+  }, [orgFloorAgents]);
+
+  const buildingDepts: DepartmentFloor[] = [
+    ...departmentData.map((d) => ({
+      dept: d.meta.dept,
+      agentCount: d.agents.length,
+      color: d.meta.color,
+      glassColor: d.meta.glassColor,
+      label: d.meta.label,
+    })),
+    ...(ctoAgent
+      ? [
+          {
+            dept: "executive",
+            agentCount: 1,
+            color: "#dbeafe",
+            glassColor: "#60a5fa",
+            label: "Executive",
+          },
+        ]
+      : []),
+  ];
+
+  const floorCount = departmentData.length;
+  const executiveFloorIndex = ctoAgent ? departmentData.length : -1;
+  const totalFloorCount = buildingDepts.length;
+  const walkthroughStart: [number, number, number] = [
+    0,
+    BUILDING_BASE_Y + 1.7,
+    9,
+  ];
+  const cameraPosition: [number, number, number] =
+    cameraMode === "walkthrough" ? walkthroughStart : [45, 40, 45];
 
   return (
     <Canvas
-      camera={{ position: [15, 12, 15], fov: 50 }}
-      shadows={{ type: THREE.PCFShadowMap }}
-      style={{ background: "#e8f0fe" }}
+      dpr={[1, 1.75]}
+      camera={{ position: cameraPosition, fov: cameraMode === "walkthrough" ? 70 : 50 }}
+      gl={{
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 1.05,
+      }}
+      shadows={{ type: THREE.PCFSoftShadowMap }}
+      style={{ background: "#dce6f5" }}
     >
-      <Sky sunPosition={[100, 50, 100]} />
-      <Environment preset="city" />
+      <Sky sunPosition={[100, 60, 80]} />
+      <Environment preset="city" resolution={256}>
+        <Lightformer
+          intensity={1.8}
+          color="#fff6e5"
+          position={[18, 18, 10]}
+          rotation={[0, Math.PI / 3, 0]}
+          scale={[18, 18, 1]}
+        />
+        <Lightformer
+          intensity={1.25}
+          color="#c7e4ff"
+          position={[-16, 10, -12]}
+          rotation={[0, -Math.PI / 4, 0]}
+          scale={[14, 10, 1]}
+        />
+        <Lightformer
+          intensity={0.9}
+          color="#9fd0ff"
+          position={[0, 28, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
+          scale={[40, 40, 1]}
+        />
+      </Environment>
 
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={0.28} />
+      <hemisphereLight
+        args={["#dbeafe", "#b4c790", 0.55]}
+        position={[0, 40, 0]}
+      />
       <directionalLight
-        position={[10, 20, 10]}
-        intensity={1.2}
+        position={[20, 50, 20]}
+        intensity={1.9}
         castShadow
+        shadow-bias={-0.00008}
+        shadow-normalBias={0.02}
         shadow-mapSize={[2048, 2048]}
+        shadow-camera-far={120}
+        shadow-camera-left={-50}
+        shadow-camera-right={50}
+        shadow-camera-top={60}
+        shadow-camera-bottom={-20}
+      />
+      <directionalLight position={[-15, 30, -10]} intensity={0.45} color="#b8dcff" />
+      <spotLight
+        position={[0, BUILDING_BASE_Y + totalFloorCount * FLOOR_HEIGHT + 10, 8]}
+        angle={0.48}
+        penumbra={0.8}
+        intensity={45}
+        distance={70}
+        decay={2}
+        color="#fff1d6"
+        castShadow
       />
 
-      {/* Green grass ground */}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.01, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[60, 60]} />
+      {/* ── Ground plane ── */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+        <planeGeometry args={[120, 120]} />
         <meshStandardMaterial color="#d4e6b5" />
       </mesh>
 
-      {/* Building */}
-      <Building
-        engDeskRows={engDeskRows}
-        mktDeskRows={mktDeskRows}
-        prodDeskRows={prodDeskRows}
-        companyName={companyName}
+      {/* ── City buildings at ground level ── */}
+      <CityBuildings />
+
+      {/* ── Floating platform ── */}
+      <FloatingPlatform position={[0, PLATFORM_Y, 0]} />
+
+      <ContactShadows
+        position={[0, BUILDING_BASE_Y + 0.02, 0]}
+        scale={22}
+        blur={2.8}
+        opacity={0.28}
+        far={24}
+        resolution={1024}
+        color="#6b7ea5"
       />
 
-      {/* Internal staircase */}
-      <Staircase />
+      {/* ── HQ building + offices (all local to BUILDING_BASE_Y) ── */}
+      <group position={[0, BUILDING_BASE_Y, 0]}>
+        <Building departments={buildingDepts} companyName={companyName} />
 
-      {/* ── Floors + agents ── */}
-      {FLOORS.map((f, fi) => {
-        const yBase = fi * 4;
-        const deptAgents =
-          f.dept === "engineering" ? insideEngAgents
-          : f.dept === "marketing"   ? marketingAgents
-          : productAgents;
+        <Staircase floorCount={totalFloorCount} />
 
-        return (
-          <group key={fi}>
-            <Floor position={[0, yBase, 0]} color={f.color} />
+        {departmentData.map(({ meta, agents: deptAgents }, fi) => {
+          const yBase = fi * FLOOR_HEIGHT;
 
-            {/* ── Department TV — mounted on the back wall, facing into the room ── */}
-            {deptAgents.length > 0 && (
-              <DepartmentTV
-                position={[-1.5, yBase + 2.2, -3.82]}
-                rotationY={0}
-                agents={deptAgents}
-                label={f.label}
-              />
-            )}
+          return (
+            <group key={meta.dept}>
+              <Floor position={[0, yBase, 0]} color={meta.color} />
 
-            {deptAgents.map((agent, j) => {
-              // Engineering: static desk seat position (AgentAvatar will seat them)
-              // Marketing/product: initial spawn position (overridden every frame by path)
-              const pos: [number, number, number] =
-                f.dept === "engineering"
-                  ? engDeskPos(j, fi)
-                  : f.dept === "marketing"
-                    ? [-3.0, STAND_ROOT_Y(fi), 0.5]  // path overrides each frame
-                    : [2.5,  STAND_ROOT_Y(fi), 1.5]; // path overrides each frame
-
-              return (
-                <AgentAvatar
-                  key={agent.agent_id}
-                  agent={agent}
-                  position={pos}
-                  agentIndex={j}
-                  numInDept={deptAgents.length}
-                  floorIndex={fi}
-                  onClick={() => onAgentClick(agent)}
+              {deptAgents.length > 0 && (
+                <DepartmentTV
+                  position={[-1.5, yBase + 2.2, -(BUILDING_DEPTH / 2 - 0.18)]}
+                  rotationY={0}
+                  agents={deptAgents}
+                  label={meta.label}
                 />
-              );
-            })}
+              )}
+
+              {deptAgents.map((agent, j) => {
+                const offPos = officeGridPos(j, yBase);
+                return (
+                  <group key={agent.agent_id}>
+                    <AgentOffice
+                      agent={agent}
+                      position={offPos}
+                      onClick={() => onAgentClick(agent)}
+                    />
+                    <AgentAvatar
+                      agent={agent}
+                      position={[offPos[0], yBase, offPos[2] + 0.4]}
+                      agentIndex={j}
+                      numInDept={deptAgents.length}
+                      floorIndex={fi}
+                      forceSeated
+                      onClick={() => onAgentClick(agent)}
+                    />
+                  </group>
+                );
+              })}
+            </group>
+          );
+        })}
+
+        {ctoAgent && (
+          <group key={ctoAgent.agent_id}>
+            <Floor position={[0, executiveFloorIndex * FLOOR_HEIGHT, 0]} color="#dbeafe" />
+            <CTOOffice
+              agent={ctoAgent}
+              position={[0, executiveFloorIndex * FLOOR_HEIGHT + 0.03, 0]}
+              onClick={() => onAgentClick(ctoAgent)}
+            />
+            <AgentAvatar
+              agent={ctoAgent}
+              position={[0, executiveFloorIndex * FLOOR_HEIGHT, 0.95]}
+              agentIndex={0}
+              numInDept={1}
+              floorIndex={executiveFloorIndex}
+              forceSeated
+              onClick={() => onAgentClick(ctoAgent)}
+            />
           </group>
-        );
-      })}
+        )}
+      </group>
 
-      {/* ── Overflow engineering agents (outside building) ── */}
-      {outsideEngAgents.map((agent, j) => (
-        <AgentAvatar
-          key={agent.agent_id}
-          agent={agent}
-          position={outsidePos(j)}
-          agentIndex={insideEngAgents.length + j}
-          numInDept={engineeringAgents.length}
-          floorIndex={0}
-          onClick={() => onAgentClick(agent)}
-        />
-      ))}
-
-      <ExplorationControls />
-      <OrbitControls
-        enablePan
-        enableZoom
-        enableRotate
-        maxPolarAngle={Math.PI / 2.1}
-        minDistance={5}
-        maxDistance={50}
+      <ExplorationControls
+        mode={cameraMode}
+        walkthroughStart={walkthroughStart}
+        minY={BUILDING_BASE_Y + 1.5}
+        maxY={BUILDING_BASE_Y + totalFloorCount * FLOOR_HEIGHT + 2}
       />
+      {cameraMode === "overview" && (
+        <OrbitControls
+          enablePan
+          enableZoom
+          enableRotate
+          maxPolarAngle={Math.PI / 2.1}
+          minDistance={8}
+          maxDistance={100}
+        />
+      )}
     </Canvas>
   );
 }

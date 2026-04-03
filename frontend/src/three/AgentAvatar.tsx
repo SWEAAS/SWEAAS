@@ -163,8 +163,10 @@ interface AgentAvatarProps {
   position: [number, number, number];
   agentIndex: number;
   numInDept: number;
-  /** Floor index 0/1/2 — needed for seated Y calculation. */
+  /** Floor index 0/1/2/3 — needed for seated Y calculation. */
   floorIndex: number;
+  /** Force seated desk pose regardless of department. */
+  forceSeated?: boolean;
   onClick: () => void;
 }
 
@@ -176,6 +178,7 @@ export default function AgentAvatar({
   agentIndex,
   numInDept,
   floorIndex,
+  forceSeated = false,
   onClick,
 }: AgentAvatarProps) {
   const groupRef      = useRef<THREE.Group>(null);
@@ -209,8 +212,8 @@ export default function AgentAvatar({
     if (!groupRef.current) return;
     const t = state.clock.elapsedTime;
 
-    // ── Engineering: SEATED at desk ──────────────────────────────────────────
-    if (isEngineer) {
+    // ── Seated at desk (engineering or forced) ─────────────────────────────
+    if (isEngineer || forceSeated) {
       // Root at SEAT_Y so hips (root+0.88) land exactly on chair seat top
       groupRef.current.position.set(
         position[0],
