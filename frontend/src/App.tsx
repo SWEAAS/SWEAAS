@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout";
 import { useAuthStore } from "./store/authStore";
@@ -23,49 +24,68 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SentryFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-sweaas-bg text-sweaas-text-primary p-8">
+      <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
+      <p className="text-sweaas-text-secondary mb-6">
+        An unexpected error occurred. Our team has been notified.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-6 py-2 bg-sweaas-accent text-white rounded-lg hover:opacity-90 transition-opacity"
+      >
+        Reload Page
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginView />} />
+    <Sentry.ErrorBoundary fallback={<SentryFallback />}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginView />} />
 
-        <Route
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<DashboardView />} />
-          <Route path="/onboarding" element={<OnboardingView />} />
           <Route
-            path="/hq"
             element={
-              <Suspense
-                fallback={
-                  <div className="flex items-center justify-center h-96 text-sweaas-text-secondary">
-                    Loading 3D Headquarters...
-                  </div>
-                }
-              >
-                <HQView />
-              </Suspense>
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
             }
-          />
-          <Route path="/agents" element={<AgentDirectoryView />} />
-          <Route path="/org-chart" element={<OrgChartView />} />
-          <Route path="/budget" element={<DashboardView />} />
-          <Route path="/revenue" element={<RevenueView />} />
-          <Route path="/reports" element={<ReportsView />} />
-          <Route path="/cto-call" element={<CTOCallView />} />
-          <Route path="/cto-call/all" element={<CTOReplicaDirectoryView />} />
-          <Route path="/customer-support" element={<CustomerCallPreview />} />
-          <Route path="/notifications" element={<NotificationsView />} />
-          <Route path="/settings" element={<SettingsView />} />
-        </Route>
+          >
+            <Route path="/dashboard" element={<DashboardView />} />
+            <Route path="/onboarding" element={<OnboardingView />} />
+            <Route
+              path="/hq"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-96 text-sweaas-text-secondary">
+                      Loading 3D Headquarters...
+                    </div>
+                  }
+                >
+                  <HQView />
+                </Suspense>
+              }
+            />
+            <Route path="/agents" element={<AgentDirectoryView />} />
+            <Route path="/org-chart" element={<OrgChartView />} />
+            <Route path="/budget" element={<DashboardView />} />
+            <Route path="/revenue" element={<RevenueView />} />
+            <Route path="/reports" element={<ReportsView />} />
+            <Route path="/cto-call" element={<CTOCallView />} />
+            <Route path="/cto-call/all" element={<CTOReplicaDirectoryView />} />
+            <Route path="/customer-support" element={<CustomerCallPreview />} />
+            <Route path="/notifications" element={<NotificationsView />} />
+            <Route path="/settings" element={<SettingsView />} />
+          </Route>
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </Sentry.ErrorBoundary>
   );
 }

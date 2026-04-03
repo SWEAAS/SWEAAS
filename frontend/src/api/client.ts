@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import axios from "axios";
 
 const api = axios.create({
@@ -12,6 +13,20 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    Sentry.captureException(error, {
+      tags: {
+        api_url: error.config?.url,
+        api_method: error.config?.method,
+        status_code: error.response?.status,
+      },
+    });
+    return Promise.reject(error);
+  },
+);
 
 export default api;
 
