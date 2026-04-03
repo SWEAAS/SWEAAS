@@ -105,6 +105,9 @@ docker-compose.override.yml
 # ── Vendor (cloned repos) ───────────────────
 vendor/
 
+# ── Claude Code (embedded repo) ─────────────
+claude-code/
+
 # ── Logs ─────────────────────────────────────
 *.log
 firebase-debug.log

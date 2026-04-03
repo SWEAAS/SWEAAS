@@ -70,8 +70,11 @@ async def engineering_manager_node(state: AgentState) -> dict:
                 ],
                 agent_id="eng-mgr-01",
             )
+            # Parse assignments from LLM response
+            assignments = _parse_assignments(result.content, eng_tasks)
             return {
                 "current_agent": "engineering_manager",
+                "assignments": assignments,
                 "messages": [{"role": "engineering_manager", "content": result.content}],
                 "status": "assigned",
             }
@@ -93,6 +96,18 @@ async def engineering_manager_node(state: AgentState) -> dict:
     payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "engineering_manager",
+        "assignments": assignments,
         "messages": [{"role": "engineering_manager", "content": payload}],
         "status": "assigned",
     }
+
+
+def _parse_assignments(llm_content: str, fallback_tasks: list[dict]) -> list[dict]:
+    """Try to parse structured assignments from LLM JSON response."""
+    try:
+        parsed = json.loads(llm_content)
+        if "assignments" in parsed and isinstance(parsed["assignments"], list):
+            return parsed["assignments"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return [_eng_task_row("backend_architect", t) for t in fallback_tasks]

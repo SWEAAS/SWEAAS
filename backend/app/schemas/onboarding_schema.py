@@ -21,8 +21,12 @@ class OnboardingAssessmentRequest(BaseModel):
     team_size: int = Field(gt=0, le=100_000)
     monthly_budget_usd: float = Field(gt=0)
     contact_email: EmailStr
+    phone_number: str = Field(default="", max_length=20)
     github_username: str = Field(default="", max_length=100)
     needs_onboarding_call: bool = False
+    budget_alert_threshold_percent: float = Field(default=85.0, ge=10.0, le=100.0)
+    enable_email_notifications: bool = True
+    enable_sms_notifications: bool = True
 
 
 class OnboardingAssessmentResponse(BaseModel):
@@ -32,6 +36,7 @@ class OnboardingAssessmentResponse(BaseModel):
     estimated_agent_count: int
     estimated_monthly_cost_usd: float
     notes: list[str]
+    notification_setup: dict[str, bool | float] | None = None
 
 
 class OnboardingContactRequest(BaseModel):

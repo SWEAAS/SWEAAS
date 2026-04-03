@@ -38,7 +38,23 @@ Respond with a JSON object containing:
 async def cto_node(state: AgentState) -> dict:
     """CTO supervisor node — decomposes tasks and creates subtasks for managers."""
     task = state.get("task", "")
+    onboarding_context = state.get("onboarding_context", "")
+    feedback_items = state.get("feedback_items", [])
     logger.info("CTO processing task: %s", task[:80])
+
+    context_parts = [f"Task: {task}"]
+    if onboarding_context:
+        context_parts.append(
+            f"\nProject context (from onboarding):\n{onboarding_context[:3000]}"
+        )
+    if feedback_items:
+        fb_lines = [
+            f"- [{f.get('source', 'unknown')}] {f.get('title', '')}"
+            for f in feedback_items[:10]
+        ]
+        context_parts.append(f"\nPending feedback to address:\n" + "\n".join(fb_lines))
+
+    user_content = "\n".join(context_parts)
 
     try:
         from app.core.llm import llm_completion, llm_has_credentials
@@ -47,7 +63,7 @@ async def cto_node(state: AgentState) -> dict:
             result = await llm_completion(
                 messages=[
                     {"role": "system", "content": CTO_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Task: {task}"},
+                    {"role": "user", "content": user_content},
                 ],
                 agent_id="cto-01",
             )

@@ -5,13 +5,17 @@ from app.services.budget_service import BudgetService
 from app.services.communication_service import CommunicationService
 from app.services.feedback_service import FeedbackService
 from app.services.github_service import GitHubService
+from app.services.greptile_service import GreptileService
 from app.services.memory_service import MemoryService
+from app.services.notification_service import NotificationService
 from app.services.observability_service import ObservabilityService
 from app.services.onboarding_service import OnboardingService
 from app.services.orchestration_service import OrchestrationService
+from app.services.report_service import ReportService
+from app.services.s3_service import S3Service
 from app.services.sandbox_service import SandboxService
-from app.services.greptile_service import GreptileService
 from app.services.sentry_service import SentryService
+from app.services.stripe_connect_service import StripeConnectService
 
 
 def get_agent_service() -> AgentService:
@@ -60,3 +64,19 @@ def get_greptile_service() -> GreptileService:
 
 def get_sentry_service() -> SentryService:
     return SentryService()
+
+
+def get_report_service() -> ReportService:
+    return ReportService()
+
+
+def get_s3_service() -> S3Service:
+    return S3Service()
+
+
+def get_stripe_connect_service() -> StripeConnectService:
+    return StripeConnectService()
+
+
+def get_notification_service() -> NotificationService:
+    return NotificationService()

@@ -34,15 +34,17 @@ async def marketing_manager_node(state: AgentState) -> dict:
                         "content": (
                             "You are the Marketing Manager. Analyze marketing tasks, "
                             "create actionable items for growth analysts, and "
-                            "respond with a JSON plan."
+                            "respond with a JSON plan with 'assignments' array."
                         ),
                     },
                     {"role": "user", "content": f"Marketing tasks:\n{tasks_text}"},
                 ],
                 agent_id="mkt-mgr-01",
             )
+            assignments = _parse_mkt_assignments(result.content, mkt_tasks)
             return {
                 "current_agent": "marketing_manager",
+                "assignments": assignments,
                 "messages": [{"role": "marketing_manager", "content": result.content}],
                 "status": "assigned",
             }
@@ -60,6 +62,21 @@ async def marketing_manager_node(state: AgentState) -> dict:
     payload = json.dumps({"assignments": assignments})
     return {
         "current_agent": "marketing_manager",
+        "assignments": assignments,
         "messages": [{"role": "marketing_manager", "content": payload}],
         "status": "assigned",
     }
+
+
+def _parse_mkt_assignments(llm_content: str, fallback_tasks: list[dict]) -> list[dict]:
+    """Try to parse structured assignments from LLM JSON response."""
+    try:
+        parsed = json.loads(llm_content)
+        if "assignments" in parsed and isinstance(parsed["assignments"], list):
+            return parsed["assignments"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return [
+        {"specialist": "growth_analyst", "task": t["description"], "priority": t.get("priority", "medium")}
+        for t in fallback_tasks
+    ]

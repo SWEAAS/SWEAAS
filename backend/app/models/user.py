@@ -29,6 +29,7 @@ class User(Base):
     supabase_uid: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(200), default="")
+    phone_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     github_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True
@@ -40,3 +41,5 @@ class User(Base):
     )
 
     organization: Mapped[Organization | None] = relationship(back_populates="users")
+    notification_preferences: Mapped[list["NotificationPreference"]] = relationship(back_populates="user")  # noqa: F821
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")  # noqa: F821

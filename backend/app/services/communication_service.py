@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
 
+import httpx
 from fastapi import HTTPException
 
 from app.core.config import get_settings

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_publishable_key: str = ""
     stripe_webhook_secret: str = ""
+    stripe_platform_fee_percent: float = 10.0
+    stripe_connect_return_url: str = "http://localhost:5173/revenue?stripe=complete"
+    stripe_connect_refresh_url: str = "http://localhost:5173/revenue?stripe=refresh"
 
     # AgentMail
     agentmail_api_key: str = ""
@@ -98,10 +101,20 @@ class Settings(BaseSettings):
     chroma_host: str = "localhost"
     chroma_port: int = 8100
 
+    # AWS S3 (onboarding docs, PDF reports)
+    aws_region: str = "us-east-1"
+    s3_bucket_name: str = "sweaas-documents"
+
+    # Greptile PR review threshold (0.0 - 1.0)
+    greptile_merge_threshold: float = 0.8
+
     # LangSmith
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "sweaas"
+
+    # Notifications / Communications
+    app_frontend_url: str = "http://localhost:5173"
 
 
 @lru_cache

@@ -9,6 +9,7 @@ Solo founders and small teams get a full engineering department — CTO, manager
 |-----|-----|
 | **This file** | Architecture, APIs, integrations, quick start |
 | [`docs/PROMPTS_AND_AI.md`](docs/PROMPTS_AND_AI.md) | Cursor / LLM prompt templates, file pointers, conventions |
+| [`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md) | Frontend integration guide — all endpoints, context map, feedback button |
 | [`docs/README.md`](docs/README.md) | Index of all docs |
 | [`backend/README.md`](backend/README.md) | Python layout, tests, Alembic, customer-facing API table |
 | [`backend/app/README.md`](backend/app/README.md) | `app/` package layers and rules |
@@ -72,9 +73,12 @@ Frontend (React + Vite + Three.js)
                 │
    Agent Hierarchy (LangGraph)
    ├── CTO Agent (supervisor)
+   │   └── Budget Gate (check_budget)
    ├── Engineering Manager → Frontend Dev, Backend Architect, DevOps, QA
    ├── Product Manager     → Product Ops
-   └── Marketing Manager   → Growth Analyst
+   ├── Marketing Manager   → Growth Analyst
+   ├── Aggregator          ← all specialist results
+   └── CTO Review          → direction report + PDF
                 │
    AWS Infrastructure
    ├── RDS PostgreSQL 16 + pgvector   (db.t4g.micro)
@@ -138,20 +142,24 @@ The frontend runs at [http://localhost:5173](http://localhost:5173).
 SWEAAS/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI entrypoint + Sentry
+│   │   ├── main.py              # FastAPI entrypoint + Sentry + Scheduler
 │   │   ├── api/                 # Routes and middleware
 │   │   │   ├── router.py        # Route aggregator
 │   │   │   ├── middleware/      # Auth (Supabase JWT)
-│   │   │   └── routes/          # All endpoint modules
+│   │   │   └── routes/          # All endpoint modules (incl. orchestration)
 │   │   ├── core/                # Config, database, dependencies
 │   │   ├── models/              # SQLAlchemy ORM models
 │   │   ├── schemas/             # Pydantic request/response schemas
 │   │   ├── services/            # Business logic layer
+│   │   │   ├── orchestration_service.py  # LangGraph execution + S3 + feedback
+│   │   │   ├── scheduler_service.py      # Budget-based APScheduler
+│   │   │   ├── report_service.py         # PDF report generation
+│   │   │   └── s3_service.py             # AWS S3 (docs + reports)
 │   │   └── agents/              # LangGraph agent system
-│   │       ├── graph.py         # Main graph definition
-│   │       ├── state.py         # Shared state TypedDict
-│   │       ├── nodes/           # CTO, managers, specialists
-│   │       ├── tools/           # LangChain tools (E2B, GitHub, Sentry)
+│   │       ├── graph.py         # Hierarchical graph (CTO->managers->specialists->aggregator->review)
+│   │       ├── state.py         # Shared state with reducers
+│   │       ├── nodes/           # CTO, managers, specialists, aggregator, CTO review
+│   │       ├── tools/           # LangChain tools + tool registry per role
 │   │       └── prompts/         # Role loader from agency-agents
 │   ├── alembic/                 # Database migrations
 │   └── tests/                   # Test suites
@@ -186,6 +194,11 @@ SWEAAS/
 | `/api/v1/agents`               | GET    | List all agents                      |
 | `/api/v1/agents/{id}`          | GET    | Agent details                        |
 | `/api/v1/agents/{id}/chat`     | POST   | Chat with agent (context injection)  |
+| `/api/v1/orchestration/execute` | POST  | Submit task for hierarchical execution |
+| `/api/v1/orchestration/status/{project_id}` | GET | Execution status          |
+| `/api/v1/orchestration/sessions/{project_id}` | GET | List past sessions      |
+| `/api/v1/orchestration/reports/{project_id}` | GET | List reports (session + CTO) |
+| `/api/v1/orchestration/reports/{project_id}/{report_id}/pdf` | GET | Download PDF |
 | `/api/v1/budget/summary`       | GET    | Token consumption overview           |
 | `/api/v1/budget/estimate`      | POST   | Budget estimation                    |
 | `/api/v1/budget/checkout`      | POST   | Stripe Checkout session              |
@@ -215,6 +228,9 @@ SWEAAS/
 | **AgentMail**  | Email for AI agents                  | `AGENTMAIL_API_KEY`      |
 | **Tavus**      | CTO + customer video (CVI)           | `TAVUS_API_KEY`, `TAVUS_CUSTOMER_*` |
 | **Golpo**      | AI explainer videos                  | `GOLPO_API_KEY`          |
+| **AWS S3**       | Onboarding docs + PDF reports        | `AWS_REGION`, `S3_BUCKET_NAME` |
+| **APScheduler**  | Budget-based agent scheduling        | (automatic)              |
+| **reportlab**    | PDF report generation                | (automatic)              |
 | **Feedback webhook** | Fan-out feedback to Slack/Zapier | `FEEDBACK_WEBHOOK_URL`   |
 | **Twilio** (optional) | Voice/SMS escalation          | `TWILIO_*`               |
 | **Intercom / Canny** | Ingest via `/feedback/webhooks/*` | HTTPS + secret headers (extend as needed) |

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, ChevronDown, Search } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+import { useNotificationStore } from "../../store/notificationStore";
 import { useProjectStore } from "../../store/projectStore";
+import NotificationPanel from "./NotificationPanel";
 
 const statusDot: Record<string, string> = {
   active:   "#059669",
@@ -13,10 +15,17 @@ export default function Header() {
   const user = useAuthStore((s) => s.user);
   const { projects, currentProject, setCurrentProject, fetchProjects } =
     useProjectStore();
+  const { unreadCount, fetchCounts, togglePanel } = useNotificationStore();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+  useEffect(() => {
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchCounts]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -237,6 +246,7 @@ export default function Header() {
         </div>
 
         <button
+          onClick={togglePanel}
           style={{
             position: "relative",
             width: 34,
@@ -254,19 +264,31 @@ export default function Header() {
           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           <Bell size={15} style={{ color: "#675f7e" }} />
-          <span
-            style={{
-              position: "absolute",
-              top: 7,
-              right: 7,
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#D97706",
-              border: "1.5px solid #fff",
-            }}
-          />
+          {unreadCount > 0 && (
+            <span
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 20,
+                background: "#dc2626",
+                border: "2px solid #fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                fontWeight: 700,
+                color: "#fff",
+                padding: "0 3px",
+              }}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
         </button>
+        <NotificationPanel />
 
         <div
           style={{

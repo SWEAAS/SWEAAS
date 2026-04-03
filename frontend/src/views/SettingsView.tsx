@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle, Palette, RefreshCw, Save, Settings2, Sparkles, Video } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle, Palette, RefreshCw, Save, Settings2, Sparkles, Video } from "lucide-react";
 import {
   communicationApi,
+  notificationApi,
   projectApi,
   type TavusReconciliationItem,
   type TavusReconciliationResponse,
   type TavusWarmCheckAttempt,
 } from "../api/client";
 import { useAuthStore } from "../store/authStore";
+import { useNotificationStore } from "../store/notificationStore";
 import { useProjectStore } from "../store/projectStore";
 import { useThemeStore } from "../store/themeStore";
 
@@ -49,12 +51,51 @@ export default function SettingsView() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
 
+  const { preferences, fetchPreferences, updatePreferences } = useNotificationStore();
+  const [phoneInput, setPhoneInput] = useState("");
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
+
   const isAdmin = useMemo(() => {
     const role = (user?.role ?? "").toLowerCase();
     return user?.email === "user@sweaas.dev" || role === "owner" || role === "admin";
   }, [user?.email, user?.role]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => { fetchPreferences(); }, [fetchPreferences]);
+
+  const handleNotifSave = async () => {
+    if (!preferences) return;
+    setNotifSaving(true);
+    try {
+      if (phoneInput) {
+        await notificationApi.updateContactInfo({ phone_number: phoneInput });
+      }
+      await updatePreferences({
+        email_enabled: preferences.email_enabled,
+        sms_enabled: preferences.sms_enabled,
+        in_app_enabled: preferences.in_app_enabled,
+        report_notifications: preferences.report_notifications,
+        budget_notifications: preferences.budget_notifications,
+        action_required_notifications: preferences.action_required_notifications,
+        feedback_notifications: preferences.feedback_notifications,
+        agent_status_notifications: preferences.agent_status_notifications,
+        security_notifications: preferences.security_notifications,
+        budget_threshold_percent: preferences.budget_threshold_percent,
+        digest_enabled: preferences.digest_enabled,
+        digest_frequency: preferences.digest_frequency,
+        quiet_hours_start: preferences.quiet_hours_start,
+        quiet_hours_end: preferences.quiet_hours_end,
+        timezone: preferences.timezone,
+      });
+      setNotifSaved(true);
+      setTimeout(() => setNotifSaved(false), 3000);
+    } catch {
+      /* silent */
+    } finally {
+      setNotifSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!currentProject) return;
@@ -263,6 +304,153 @@ export default function SettingsView() {
             {brandHex}
           </span>
         </div>
+      </section>
+
+      {/* ── Notification preferences ──────────────────────────── */}
+      <section className="rounded-[28px] border border-[#ece7f5] bg-white p-6 shadow-[0_16px_42px_-34px_rgba(42,26,92,0.25)]">
+        <div className="mb-5 flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: "var(--brand-chip)" }}>
+            <Bell size={15} className="text-[var(--brand)]" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-[#1f1638] m-0">Notification Preferences</p>
+            <p className="text-[11px] text-[#7a7390] m-0">Control how and when you receive alerts</p>
+          </div>
+        </div>
+
+        {preferences ? (
+          <div className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Phone number (for SMS)</label>
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(e.target.value)}
+                placeholder="+1 (555) 123-4567"
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <p className="mb-2 text-[12px] font-semibold text-[#675f7e]">Channels</p>
+              <div className="flex flex-wrap gap-4">
+                {([
+                  ["email_enabled", "Email"],
+                  ["sms_enabled", "SMS"],
+                  ["in_app_enabled", "In-app"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-[13px] text-[#1f1638] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={preferences[key]}
+                      onChange={(e) => updatePreferences({ [key]: e.target.checked })}
+                      className="accent-[var(--brand)] w-4 h-4"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[12px] font-semibold text-[#675f7e]">Notification types</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                {([
+                  ["report_notifications", "Reports generated"],
+                  ["budget_notifications", "Budget alerts"],
+                  ["action_required_notifications", "Action required"],
+                  ["feedback_notifications", "Feedback received"],
+                  ["agent_status_notifications", "Agent status changes"],
+                  ["security_notifications", "Security alerts"],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-[13px] text-[#1f1638] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={preferences[key]}
+                      onChange={(e) => updatePreferences({ [key]: e.target.checked })}
+                      className="accent-[var(--brand)] w-4 h-4"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Budget alert threshold (%)</label>
+                <input
+                  type="number"
+                  min={10}
+                  max={100}
+                  value={preferences.budget_threshold_percent}
+                  onChange={(e) => updatePreferences({ budget_threshold_percent: Math.max(10, Math.min(100, Number(e.target.value) || 85)) })}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Timezone</label>
+                <input
+                  type="text"
+                  value={preferences.timezone}
+                  onChange={(e) => updatePreferences({ timezone: e.target.value })}
+                  placeholder="UTC"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Quiet hours start</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={preferences.quiet_hours_start ?? ""}
+                  onChange={(e) => updatePreferences({ quiet_hours_start: e.target.value ? Number(e.target.value) : null })}
+                  placeholder="e.g. 22 (10 PM)"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Quiet hours end</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={preferences.quiet_hours_end ?? ""}
+                  onChange={(e) => updatePreferences({ quiet_hours_end: e.target.value ? Number(e.target.value) : null })}
+                  placeholder="e.g. 8 (8 AM)"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-[13px] text-[#1f1638] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={preferences.digest_enabled}
+                  onChange={(e) => updatePreferences({ digest_enabled: e.target.checked })}
+                  className="accent-[var(--brand)] w-4 h-4"
+                />
+                Daily digest email
+              </label>
+            </div>
+
+            <button
+              onClick={handleNotifSave}
+              disabled={notifSaving}
+              className="inline-flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-50"
+              style={{ background: "var(--brand)" }}
+            >
+              {notifSaving ? "Saving…" : notifSaved ? <><CheckCircle size={14} /> Saved</> : <><Save size={14} /> Save preferences</>}
+            </button>
+          </div>
+        ) : (
+          <p className="text-[13px] text-[#7a7390]">Loading notification preferences…</p>
+        )}
       </section>
 
       {!currentProject && (

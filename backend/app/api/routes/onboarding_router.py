@@ -1,6 +1,8 @@
 """Onboarding endpoints — assessment, department selection, contact capture, and team setup."""
 
+import logging
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -9,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_onboarding_service
+from app.models.notification import NotificationPreference
 from app.models.user import User
 from app.schemas.onboarding_schema import (
     CTOAssignmentPatchRequest,
@@ -22,6 +25,7 @@ from app.schemas.onboarding_schema import (
 )
 from app.services.onboarding_service import OnboardingService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 
@@ -43,16 +47,43 @@ def list_departments(
 
 
 @router.post("/assess", response_model=OnboardingAssessmentResponse)
-def assess(
+async def assess(
     request: OnboardingAssessmentRequest,
     onboarding_service: Annotated[OnboardingService, Depends(get_onboarding_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> OnboardingAssessmentResponse:
     """Assess a new organization and recommend configuration.
 
-    Returns suggested departments, rollout plan, agent count,
-    and estimated monthly cost based on the provided budget.
+    Persists phone number and creates default notification preferences
+    when a matching user is found.
     """
-    return onboarding_service.assess(request)
+    result = onboarding_service.assess(request)
+
+    stmt = select(User).where(User.email == request.contact_email)
+    db_result = await db.execute(stmt)
+    user = db_result.scalar_one_or_none()
+
+    if user and request.phone_number:
+        user.phone_number = request.phone_number
+
+    if user:
+        pref_stmt = select(NotificationPreference).where(
+            NotificationPreference.user_id == user.id,
+            NotificationPreference.project_id.is_(None),
+        )
+        existing = (await db.execute(pref_stmt)).scalar_one_or_none()
+        if existing is None:
+            pref = NotificationPreference(
+                id=uuid4(),
+                user_id=user.id,
+                email_enabled=request.enable_email_notifications,
+                sms_enabled=request.enable_sms_notifications,
+                budget_threshold_percent=request.budget_alert_threshold_percent,
+            )
+            db.add(pref)
+            logger.info("Created default notification preferences for user %s", user.id)
+
+    return result
 
 
 @router.post("/contact", response_model=OnboardingContactResponse)

@@ -51,6 +51,8 @@ class FeedbackService:
         if settings.feedback_webhook_url:
             self._forward_webhook(row)
 
+        self._schedule_feedback_notification(row)
+
         return FeedbackItemResponse(
             feedback_id=fid,
             project_id=row["project_id"],
@@ -58,6 +60,42 @@ class FeedbackService:
             title=request.title,
             created_at=created,
         )
+
+    def _schedule_feedback_notification(self, row: dict[str, Any]) -> None:
+        """Fire-and-forget notification to org owners about new feedback."""
+        import asyncio
+
+        async def _send() -> None:
+            try:
+                from sqlalchemy import select
+
+                from app.core.database import async_session_factory
+                from app.models.user import User
+                from app.services.notification_service import NotificationService
+
+                async with async_session_factory() as db:
+                    result = await db.execute(select(User).limit(1))
+                    user = result.scalar_one_or_none()
+                    if not user or not user.organization_id:
+                        return
+
+                    svc = NotificationService()
+                    await svc.notify_feedback_received(
+                        org_id=user.organization_id,
+                        project_id=row.get("project_id"),
+                        feedback_title=row.get("title", "Untitled"),
+                        feedback_source=row.get("source", "unknown"),
+                        db=db,
+                    )
+                    await db.commit()
+            except Exception as exc:
+                logger.warning("Feedback notification failed: %s", exc)
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_send())
+        except RuntimeError:
+            pass
 
     def list_for_project(self, project_id: str | None) -> list[FeedbackItemResponse]:
         """List recent feedback, optionally filtered by project."""

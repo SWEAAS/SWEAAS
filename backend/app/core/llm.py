@@ -231,3 +231,133 @@ def llm_has_credentials(settings: Settings | None = None) -> bool:
     if provider == "anthropic":
         return bool(s.anthropic_api_key)
     return bool(s.openai_api_key)
+
+
+# ---------------------------------------------------------------------------
+# LangChain ChatModel for tool-calling specialists
+# ---------------------------------------------------------------------------
+_lc_models: dict[str, Any] = {}
+
+
+def get_tool_calling_llm():
+    """Return a LangChain BaseChatModel configured for the default provider.
+
+    Supports tool binding via .bind_tools(). Uses langchain-openai for
+    OpenAI/xAI providers and langchain-anthropic for Anthropic.
+    """
+    s = get_settings()
+    model = (s.llm_default_model or "gpt-4o-mini").strip()
+    provider = _resolve_provider(model)
+    clean = _strip_prefix(model)
+
+    cache_key = f"{provider}:{clean}"
+    if cache_key in _lc_models:
+        return _lc_models[cache_key]
+
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(
+            model=clean,
+            api_key=s.anthropic_api_key,
+            max_tokens=4096,
+        )
+    elif provider == "xai":
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model=clean,
+            api_key=s.xai_api_key,
+            base_url="https://api.x.ai/v1",
+        )
+    else:
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model=clean,
+            api_key=s.openai_api_key,
+        )
+
+    _lc_models[cache_key] = llm
+    return llm
+
+
+async def run_agent_with_tools(
+    *,
+    system_prompt: str,
+    user_message: str,
+    tools: list,
+    agent_id: str | None = None,
+    max_tool_rounds: int = 5,
+) -> LLMResult:
+    """Run a tool-calling agent loop using LangChain's ChatModel.
+
+    1. Sends system + user messages with bound tools
+    2. If the LLM returns tool calls, executes them and feeds results back
+    3. Repeats until the LLM returns a text response or max rounds hit
+    4. Records usage via budget tracker
+
+    Returns a unified LLMResult with the final text response and
+    aggregated token counts.
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+    llm = get_tool_calling_llm()
+    llm_with_tools = llm.bind_tools(tools) if tools else llm
+
+    messages: list = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_message),
+    ]
+
+    total_prompt = 0
+    total_completion = 0
+    final_content = ""
+
+    for _round in range(max_tool_rounds):
+        response: AIMessage = await llm_with_tools.ainvoke(messages)
+
+        usage = getattr(response, "usage_metadata", None) or {}
+        total_prompt += usage.get("input_tokens", 0)
+        total_completion += usage.get("output_tokens", 0)
+
+        if not response.tool_calls:
+            final_content = response.content or ""
+            break
+
+        messages.append(response)
+        for tc in response.tool_calls:
+            tool_fn = next((t for t in tools if t.name == tc["name"]), None)
+            if tool_fn:
+                try:
+                    tool_result = tool_fn.invoke(tc["args"])
+                except Exception as exc:
+                    tool_result = f"Tool error: {exc}"
+            else:
+                tool_result = f"Unknown tool: {tc['name']}"
+            messages.append(ToolMessage(content=str(tool_result), tool_call_id=tc["id"]))
+    else:
+        final_content = response.content or "[max tool rounds reached]"
+
+    total_tokens = total_prompt + total_completion
+    s = get_settings()
+    model = (s.llm_default_model or "gpt-4o-mini").strip()
+    cost = calculate_cost(model, total_prompt, total_completion)
+
+    result = LLMResult(
+        content=final_content,
+        prompt_tokens=total_prompt,
+        completion_tokens=total_completion,
+        total_tokens=total_tokens,
+        cost_usd=cost,
+        model=model,
+    )
+
+    if agent_id:
+        from app.core.llm_budget import budget_tracker
+        if budget_tracker.is_initialised:
+            await budget_tracker.record_usage(agent_id, result)
+
+    logger.info(
+        "Tool agent %s agent=%s tokens=%d cost=$%.6f rounds=%d",
+        model, agent_id or "-", total_tokens, cost, _round + 1,
+    )
+
+    return result

@@ -45,6 +45,10 @@ export default function OnboardingView() {
   const [overallBudgetUsd, setOverallBudgetUsd] = useState(6000);
   const [departmentSizes, setDepartmentSizes] = useState(buildDepartmentSizesForCompanySize(50));
   const [selectedCtoReplicaId, setSelectedCtoReplicaId] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [budgetAlertThreshold, setBudgetAlertThreshold] = useState(85);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [smsNotifications, setSmsNotifications] = useState(true);
 
   const steps: { key: Step; label: string; icon: typeof Building2 }[] = [
     { key: "company", label: "Company", icon: Building2 },
@@ -145,6 +149,19 @@ export default function OnboardingView() {
     });
 
     if (result) {
+      try {
+        const { notificationApi } = await import("../api/client");
+        if (phoneNumber) {
+          await notificationApi.updateContactInfo({ phone_number: phoneNumber });
+        }
+        await notificationApi.updatePreferences({
+          email_enabled: emailNotifications,
+          sms_enabled: smsNotifications,
+          budget_threshold_percent: budgetAlertThreshold,
+        });
+      } catch {
+        /* preferences will use defaults — non-blocking */
+      }
       navigate("/dashboard");
     }
   }
@@ -248,6 +265,66 @@ export default function OnboardingView() {
                   onChange={(event) => setOverallBudgetUsd(Math.max(1, Number(event.target.value) || 1))}
                   className={inputClass}
                 />
+              </div>
+            </div>
+
+            {/* Contact & Notifications */}
+            <div className="mt-2 rounded-[22px] border border-[#ece7f5] bg-[#faf8fd] p-5">
+              <h4 className="text-[14px] font-semibold text-[#1f1638] mb-1">Contact & Notifications</h4>
+              <p className="text-[12px] text-[#675f7e] mb-4">
+                You'll automatically receive email and SMS notifications for reports, budget alerts, and action items.
+              </p>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
+                    Phone number (for SMS alerts)
+                  </label>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">
+                    Budget alert threshold (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    value={budgetAlertThreshold}
+                    onChange={(e) => setBudgetAlertThreshold(Math.max(10, Math.min(100, Number(e.target.value) || 85)))}
+                    className={inputClass}
+                  />
+                  <p className="mt-1 text-[11px] text-[#7a7390]">
+                    Get alerted when any agent exceeds this % of its budget
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-6">
+                <label className="flex items-center gap-2 text-[13px] text-[#1f1638] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={emailNotifications}
+                    onChange={(e) => setEmailNotifications(e.target.checked)}
+                    className="accent-[var(--brand)] w-4 h-4"
+                  />
+                  Email notifications
+                </label>
+                <label className="flex items-center gap-2 text-[13px] text-[#1f1638] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={smsNotifications}
+                    onChange={(e) => setSmsNotifications(e.target.checked)}
+                    className="accent-[var(--brand)] w-4 h-4"
+                  />
+                  SMS notifications
+                </label>
               </div>
             </div>
 
