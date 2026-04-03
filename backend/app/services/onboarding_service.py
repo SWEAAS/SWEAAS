@@ -86,9 +86,21 @@ class OnboardingService:
             )
 
         notes = [
-            "Collect a calendar-capable email during onboarding so invites can be automated.",
-            "Define strike thresholds before launch so overages are visible in the frontend.",
+            "You will automatically receive email and SMS notifications for reports, "
+            "budget alerts, and action items. Manage preferences in Settings.",
+            f"Budget alerts will fire when any agent exceeds {request.budget_alert_threshold_percent:.0f}% "
+            "of its daily token allocation.",
         ]
+        if not request.phone_number:
+            notes.append(
+                "Add a phone number in Settings to receive SMS alerts for critical notifications."
+            )
+
+        notification_setup = {
+            "email_enabled": request.enable_email_notifications,
+            "sms_enabled": request.enable_sms_notifications,
+            "budget_threshold_percent": request.budget_alert_threshold_percent,
+        }
 
         return OnboardingAssessmentResponse(
             company_name=request.company_name,
@@ -97,6 +109,7 @@ class OnboardingService:
             estimated_agent_count=estimated_agent_count,
             estimated_monthly_cost_usd=estimated_cost,
             notes=notes,
+            notification_setup=notification_setup,
         )
 
     def capture_contact(self, request: OnboardingContactRequest) -> OnboardingContactResponse:

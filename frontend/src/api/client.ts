@@ -238,6 +238,32 @@ export interface TavusReconciliationResponse {
   updates_to_stored_replica: TavusReconciliationItem[];
 }
 
+// ── Stripe Connect API ──────────────────────────────────────────
+
+export const stripeApi = {
+  onboard: () => api.post("/stripe/connect/onboard"),
+  connectStatus: () => api.get("/stripe/connect/status"),
+  refreshAccountLink: () => api.post("/stripe/connect/account-link"),
+  createCheckout: (projectId: string, priceId: string) =>
+    api.post("/stripe/checkout", { project_id: projectId, price_id: priceId }),
+  revenue: (projectId?: string) =>
+    api.get("/stripe/revenue", { params: projectId ? { project_id: projectId } : {} }),
+  revenueBreakdown: (projectId?: string) =>
+    api.get("/stripe/revenue/breakdown", { params: projectId ? { project_id: projectId } : {} }),
+  payments: (projectId?: string, limit = 50, offset = 0) =>
+    api.get("/stripe/payments", {
+      params: {
+        ...(projectId ? { project_id: projectId } : {}),
+        limit,
+        offset,
+      },
+    }),
+  balance: () => api.get("/stripe/balance"),
+  payouts: () => api.get("/stripe/payouts"),
+};
+
+// ── Feedback API ────────────────────────────────────────────────
+
 export const feedbackApi = {
   submit: (data: {
     project_id?: string;
@@ -249,4 +275,40 @@ export const feedbackApi = {
   }) => api.post("/feedback", data),
   list: (projectId?: string) =>
     api.get("/feedback", { params: projectId ? { project_id: projectId } : {} }),
+};
+
+// ── Notification API ────────────────────────────────────────────
+
+export const notificationApi = {
+  list: (projectId?: string, limit = 50, offset = 0, unreadOnly = false) =>
+    api.get("/notifications", {
+      params: {
+        ...(projectId ? { project_id: projectId } : {}),
+        limit,
+        offset,
+        unread_only: unreadOnly,
+      },
+    }),
+  counts: () => api.get("/notifications/count"),
+  markRead: (notificationIds: string[]) =>
+    api.post("/notifications/read", { notification_ids: notificationIds }),
+  markAllRead: () => api.post("/notifications/read-all"),
+  getPreferences: (projectId?: string) =>
+    api.get("/notifications/preferences", {
+      params: projectId ? { project_id: projectId } : {},
+    }),
+  updatePreferences: (data: Record<string, unknown>) =>
+    api.put("/notifications/preferences", data),
+  updateContactInfo: (data: { phone_number?: string; notification_email?: string }) =>
+    api.put("/notifications/contact-info", data),
+  send: (data: {
+    user_id?: string;
+    project_id?: string;
+    type?: string;
+    priority?: string;
+    title: string;
+    body: string;
+    link_url?: string;
+    channel?: string;
+  }) => api.post("/notifications/send", data),
 };

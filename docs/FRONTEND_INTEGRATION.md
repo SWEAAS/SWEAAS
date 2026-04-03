@@ -15,10 +15,12 @@ All endpoints are under `{API_BASE}/api/v1`.
 6. [Reports](#reports)
 7. [Feedback System](#feedback-system)
 8. [Communication](#communication)
-9. [Observability Dashboard](#observability-dashboard)
-10. [Scheduling Configuration](#scheduling-configuration)
-11. [Context and Storage Map](#context-and-storage-map)
-12. [User Feedback Button Spec](#user-feedback-button-spec)
+9. [Notifications](#notifications)
+10. [Stripe Connect and Revenue](#stripe-connect-and-revenue)
+11. [Observability Dashboard](#observability-dashboard)
+12. [Scheduling Configuration](#scheduling-configuration)
+13. [Context and Storage Map](#context-and-storage-map)
+14. [User Feedback Button Spec](#user-feedback-button-spec)
 
 ---
 
@@ -408,6 +410,172 @@ Returns context for the CTO video call (recent activity, project state).
 
 ---
 
+## Notifications
+
+The notification system spans multiple frontend surfaces: a header bell icon with
+live unread count, a slide-out notification panel, a dedicated full-page view,
+notification preferences in Settings, and onboarding contact/preference capture.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/store/notificationStore.ts` | Zustand store — notifications list, counts, preferences, panel state |
+| `frontend/src/components/layout/NotificationPanel.tsx` | Slide-out panel triggered from the Header bell icon |
+| `frontend/src/views/NotificationsView.tsx` | Full-page notification center at `/notifications` |
+
+### Modified Files
+
+| File | What Changed |
+|------|--------------|
+| `frontend/src/api/client.ts` | Added `notificationApi` namespace with list, counts, markRead, markAllRead, getPreferences, updatePreferences, updateContactInfo, and send methods |
+| `frontend/src/components/layout/Header.tsx` | Bell icon now shows live unread badge (polls every 30 s), click toggles `NotificationPanel` |
+| `frontend/src/components/layout/Sidebar.tsx` | Added "Notifications" nav item (`Bell` icon, route `/notifications`) |
+| `frontend/src/App.tsx` | Added `<Route path="/notifications" element={<NotificationsView />} />` |
+| `frontend/src/views/OnboardingView.tsx` | New "Contact & Notifications" section collecting phone number, SMS/email toggles, budget alert threshold — saved via `notificationApi` on submit |
+| `frontend/src/views/SettingsView.tsx` | New "Notification Preferences" card — channels (email/SMS/in-app), notification types, budget threshold, quiet hours, timezone, daily digest toggle |
+
+### Notification API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/notifications` | GET | List notifications (supports `project_id`, `limit`, `offset`, `unread_only`) |
+| `/api/v1/notifications/count` | GET | Unread/total counts and breakdown by priority |
+| `/api/v1/notifications/read` | POST | Mark specific notification IDs as read |
+| `/api/v1/notifications/read-all` | POST | Mark all notifications as read |
+| `/api/v1/notifications/preferences` | GET | Get notification preferences (optional `project_id`) |
+| `/api/v1/notifications/preferences` | PUT | Update notification preferences |
+| `/api/v1/notifications/contact-info` | PUT | Update phone number / notification email |
+| `/api/v1/notifications/send` | POST | Send a notification (admin/internal) |
+
+### Notification Store Shape
+
+```typescript
+interface NotificationItem {
+  id: string;
+  type: string;           // report_generated | budget_threshold | budget_exhausted | action_required | feedback_received | agent_status_change | cto_review_scheduled | orchestration_complete | security_alert | system
+  priority: "low" | "medium" | "high" | "critical";
+  title: string;
+  body: string;
+  link_url: string | null;
+  channel: string;
+  status: string;
+  project_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+interface NotificationPreferences {
+  email_enabled: boolean;
+  sms_enabled: boolean;
+  in_app_enabled: boolean;
+  report_notifications: boolean;
+  budget_notifications: boolean;
+  action_required_notifications: boolean;
+  feedback_notifications: boolean;
+  agent_status_notifications: boolean;
+  security_notifications: boolean;
+  budget_threshold_percent: number;
+  budget_threshold_amount_usd: number | null;
+  digest_enabled: boolean;
+  digest_frequency: string;
+  quiet_hours_start: number | null;
+  quiet_hours_end: number | null;
+  timezone: string;
+}
+```
+
+### Header Polling
+
+The `Header` component polls `GET /notifications/count` every 30 seconds to
+keep the unread badge current without requiring WebSockets.
+
+---
+
+## Stripe Connect and Revenue
+
+Stripe Connect integration lets agency owners connect their Stripe account,
+receive payments from end-user customers, and view revenue analytics.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/store/stripeStore.ts` | Zustand store — connect status, revenue summary, monthly breakdown, balance, payouts, payments |
+| `frontend/src/views/RevenueView.tsx` | Full-page revenue dashboard at `/revenue` with charts (Recharts), payment table, payout history |
+
+### Modified Files
+
+| File | What Changed |
+|------|--------------|
+| `frontend/src/api/client.ts` | Added `stripeApi` namespace with onboard, connectStatus, refreshAccountLink, createCheckout, revenue, revenueBreakdown, payments, balance, and payouts methods |
+| `frontend/src/components/layout/Sidebar.tsx` | Added "Revenue" nav item (`DollarSign` icon, route `/revenue`) |
+| `frontend/src/App.tsx` | Added `<Route path="/revenue" element={<RevenueView />} />` |
+
+### Stripe Connect API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/stripe/connect/onboard` | POST | Start Stripe Connect onboarding, returns `account_link_url` |
+| `/api/v1/stripe/connect/status` | GET | Get connect status (account ID, charges/payouts enabled) |
+| `/api/v1/stripe/connect/account-link` | POST | Refresh an expired onboarding link |
+| `/api/v1/stripe/checkout` | POST | Create a Checkout Session (`project_id`, `price_id`) |
+| `/api/v1/stripe/revenue` | GET | Revenue summary (optional `project_id`) |
+| `/api/v1/stripe/revenue/breakdown` | GET | Monthly revenue breakdown (optional `project_id`) |
+| `/api/v1/stripe/payments` | GET | Payment list (optional `project_id`, `limit`, `offset`) |
+| `/api/v1/stripe/balance` | GET | Available + pending balance |
+| `/api/v1/stripe/payouts` | GET | Payout history |
+
+### Stripe Store Shape
+
+```typescript
+interface ConnectStatus {
+  stripe_account_id: string | null;
+  onboarding_complete: boolean;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+}
+
+interface RevenueSummary {
+  total_revenue_cents: number;
+  total_fees_cents: number;
+  net_earnings_cents: number;
+  payment_count: number;
+  currency: string;
+}
+
+interface RevenueBreakdownItem {
+  month: string;
+  revenue_cents: number;
+  fees_cents: number;
+  net_cents: number;
+  payment_count: number;
+}
+
+interface Balance {
+  available_cents: number;
+  pending_cents: number;
+  currency: string;
+}
+```
+
+### Revenue View Features
+
+- **Connect status banner** — shows onboarding state, CTA to start/resume Stripe setup
+- **Balance + revenue stats** — five KPI cards (available balance, pending, total revenue, fees, net)
+- **Monthly revenue chart** — area chart via Recharts showing revenue vs net earnings over time
+- **Recent payments table** — date, amount, fee, net, status badge, customer email
+- **Payout history table** — date, amount, status, arrival date
+- **Recharts dependency** — `RevenueView` requires `recharts` (`AreaChart`, `Area`, `XAxis`, `YAxis`, `CartesianGrid`, `Tooltip`, `ResponsiveContainer`)
+
+### Onboarding Flow
+
+The Connect onboarding flow redirects the user to Stripe's hosted onboarding.
+After completion, Stripe redirects back and the frontend polls `/stripe/connect/status`
+to detect when `charges_enabled` flips to `true`.
+
+---
+
 ## Observability Dashboard
 
 ### Overview Metrics
@@ -466,6 +634,11 @@ setting the budget. Status is visible via the orchestration status endpoint.
 | Execution state | LangGraph in-memory per session | `/orchestration/status/{id}` |
 | Scheduling | APScheduler in-memory | Automatic |
 | LLM tracing | LangSmith (external) | LangSmith dashboard |
+| Notifications | PostgreSQL `notifications` | `/notifications` |
+| Notification prefs | PostgreSQL `notification_preferences` | `/notifications/preferences` |
+| Stripe accounts | PostgreSQL `stripe_connected_accounts` | `/stripe/connect/status` |
+| Payments | PostgreSQL `stripe_payments` | `/stripe/payments` |
+| Payouts | PostgreSQL `stripe_payouts` | `/stripe/payouts` |
 
 ---
 

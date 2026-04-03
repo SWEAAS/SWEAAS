@@ -5,7 +5,9 @@ import {
   Settings,
   Users,
   CreditCard,
+  DollarSign,
   BarChart3,
+  Bell,
   GitBranch,
   LogOut,
   Video,
@@ -18,8 +20,10 @@ const navItems = [
   { to: "/agents",     icon: Users,           label: "Agents" },
   { to: "/org-chart",  icon: GitBranch,       label: "Org Chart" },
   { to: "/budget",     icon: CreditCard,      label: "Budget" },
+  { to: "/revenue",    icon: DollarSign,      label: "Revenue" },
   { to: "/reports",    icon: BarChart3,       label: "Reports" },
-  { to: "/cto-call",   icon: Video,           label: "Cto Call" },
+  { to: "/cto-call",   icon: Video,           label: "CTO Call" },
+  { to: "/notifications", icon: Bell,         label: "Notifications" },
   { to: "/settings",   icon: Settings,        label: "Settings" },
 ];
 

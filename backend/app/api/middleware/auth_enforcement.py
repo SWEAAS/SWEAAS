@@ -69,6 +69,8 @@ def _is_allowlisted_api_route(method: str, path: str, api_prefix: str) -> bool:
         return True
     if normalized == f"{api_prefix.rstrip('/')}/budget/webhook" and method == "POST":
         return True
+    if normalized == f"{api_prefix.rstrip('/')}/stripe/webhook" and method == "POST":
+        return True
     if normalized == f"{api_prefix.rstrip('/')}/feedback/webhooks/intercom" and method == "POST":
         return True
     if normalized == f"{api_prefix.rstrip('/')}/feedback/webhooks/canny" and method == "POST":
@@ -78,5 +80,7 @@ def _is_allowlisted_api_route(method: str, path: str, api_prefix: str) -> bool:
     if normalized == f"{api_prefix.rstrip('/')}/communication/customer-call/public" and method == "POST":
         return True
     if normalized.startswith(f"{api_prefix.rstrip('/')}/communication/replica-posters/") and method in ("GET", "HEAD"):
+        return True
+    if normalized == f"{api_prefix.rstrip('/')}/onboarding/assess" and method == "POST":
         return True
     return False

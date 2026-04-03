@@ -134,6 +134,7 @@ class OrchestrationService:
 
             await self._persist_session(session_data)
             await self._notify_webhook(session_data)
+            await self._notify_completion(session_data)
 
             return session_data
 
@@ -345,3 +346,32 @@ class OrchestrationService:
                 await client.post(settings.feedback_webhook_url, json=payload, timeout=10)
         except Exception as exc:
             logger.warning("Webhook notification failed: %s", exc)
+
+    async def _notify_completion(self, session_data: dict) -> None:
+        """Send in-app / email / SMS notifications when an orchestration session finishes."""
+        try:
+            from app.core.database import async_session_factory
+            from app.models.user import User
+            from app.services.notification_service import NotificationService
+            from sqlalchemy import select
+
+            project_id = session_data["project_id"]
+            summary = session_data.get("session_summary", session_data.get("task", ""))[:500]
+
+            async with async_session_factory() as db:
+                result = await db.execute(select(User).limit(1))
+                user = result.scalar_one_or_none()
+                if not user or not user.organization_id:
+                    return
+
+                svc = NotificationService()
+                await svc.notify_orchestration_complete(
+                    org_id=user.organization_id,
+                    project_id=project_id,
+                    session_id=session_data["session_id"],
+                    summary=summary,
+                    db=db,
+                )
+                await db.commit()
+        except Exception as exc:
+            logger.warning("Session completion notification failed: %s", exc)

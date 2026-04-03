@@ -1,7 +1,9 @@
 """Domain logic for budget tracking, token consumption, and Stripe billing."""
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.config import get_settings
 from app.core.llm_budget import budget_tracker
@@ -14,8 +16,15 @@ from app.schemas.budget_schema import (
 )
 from app.services.seed_data import AGENTS
 
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+_alerted_agents: set[str] = set()
 
 
 class BudgetService:
@@ -40,6 +49,40 @@ class BudgetService:
             consumption_percent=consumption_pct,
             agents=agent_snapshots,
         )
+
+    async def check_budget_thresholds_and_notify(
+        self,
+        user_id: "UUID",
+        org_id: "UUID",
+        project_id: str | None,
+        db: "AsyncSession",
+    ) -> None:
+        """Check all agents against budget thresholds and fire notifications."""
+        from app.services.notification_service import NotificationService
+
+        notification_service = NotificationService()
+
+        for agent in AGENTS:
+            snapshot = self._build_snapshot(agent)
+            alert_key = f"{agent['agent_id']}:{snapshot.usage_percent:.0f}"
+
+            if snapshot.usage_percent >= 85.0 and alert_key not in _alerted_agents:
+                _alerted_agents.add(alert_key)
+                try:
+                    await notification_service.notify_budget_threshold(
+                        user_id=user_id,
+                        org_id=org_id,
+                        project_id=project_id,
+                        agent_name=agent["name"],
+                        usage_percent=snapshot.usage_percent,
+                        db=db,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to send budget notification for agent %s",
+                        agent["agent_id"],
+                        exc_info=True,
+                    )
 
     def estimate_budget(self, request: BudgetEstimateRequest) -> BudgetEstimateResponse:
         profile_multiplier = {"light": 18_000, "balanced": 36_000, "heavy": 60_000}[
@@ -77,6 +120,11 @@ class BudgetService:
     async def create_checkout_session(
         self, project_id: str, price_id: str
     ) -> StripeCheckoutResponse:
+        """Create a direct Stripe Checkout session (non-Connect, for SWEAAS subscriptions).
+
+        For Connect destination-charge checkout, use the /stripe/checkout endpoint
+        which routes through StripeConnectService.
+        """
         if not settings.stripe_secret_key:
             return StripeCheckoutResponse(
                 checkout_url="https://checkout.stripe.com/dev-placeholder",
