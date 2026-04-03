@@ -19,6 +19,7 @@ from app.api.routes.health_router import router as health_router
 from app.api.routes.notification_router import router as notification_router
 from app.api.routes.observability_router import router as observability_router
 from app.api.routes.onboarding_router import router as onboarding_router
+from app.api.routes.organization_router import router as organization_router
 from app.api.routes.orchestration_router import router as orchestration_router
 from app.api.routes.project_router import router as project_router
 from app.api.routes.stripe_connect_router import router as stripe_connect_router
@@ -36,4 +37,5 @@ api_router.include_router(feedback_router)
 api_router.include_router(github_router)
 api_router.include_router(observability_router)
 api_router.include_router(orchestration_router)
+api_router.include_router(organization_router)
 api_router.include_router(stripe_connect_router)

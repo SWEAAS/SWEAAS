@@ -50,8 +50,6 @@ function officeGridPos(index: number, floorBaseY: number): [number, number, numb
   ];
 }
 
-const SEAT_ROOT_Y = (fi: number) => fi * FLOOR_HEIGHT - 0.415;
-
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface HQSceneProps {
@@ -119,7 +117,6 @@ export default function HQScene({
       : []),
   ];
 
-  const floorCount = departmentData.length;
   const executiveFloorIndex = ctoAgent ? departmentData.length : -1;
   const totalFloorCount = buildingDepts.length;
   const walkthroughStart: [number, number, number] = [

@@ -107,10 +107,8 @@ export default function CtoReport({ title, subtitle, contributors, sections, cha
       activeSections.map((section, index) => ({
         ...section,
         author: contributors[index % Math.max(contributors.length, 1)] ?? null,
-        timeLabel: section.id !== "empty-state"
-          ? (section.created_at
-              ? new Date(section.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-              : new Date(Date.now() - (activeSections.length - index) * 480_000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))
+        timeLabel: section.created_at
+          ? new Date(section.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
           : "",
       })),
     [activeSections, contributors],

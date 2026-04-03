@@ -55,8 +55,9 @@ async def _ensure_db_user_for_jwt_user(
     base_slug = _slug_fragment(user.email.split("@")[0] if "@" in user.email else str(user.uid)[:12])
     org_slug = f"{base_slug}-{uuid.uuid4().hex[:10]}"
 
+    username = email.split("@")[0] if "@" in email else str(user.uid)[:12]
     org = Organization(
-        name=(f"{full_name}'s workspace" if full_name else "Workspace"),
+        name=username,
         slug=org_slug,
     )
     db.add(org)
@@ -120,6 +121,7 @@ async def get_profile(
             full_name=db_user.full_name or "",
             github_username=db_user.github_username or "",
             role=db_user.role or user.role,
+            onboarding_completed=db_user.onboarding_completed,
         )
 
     return UserProfile(
@@ -128,4 +130,5 @@ async def get_profile(
         full_name="",
         github_username="",
         role=user.role,
+        onboarding_completed=False,
     )

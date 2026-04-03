@@ -1,8 +1,9 @@
 """Onboarding endpoints — assessment, department selection, contact capture, and team setup."""
 
 import logging
+from datetime import date
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -11,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_onboarding_service
+from app.models.agent import AgentConfig
 from app.models.notification import NotificationPreference
-from app.models.user import User
+from app.models.project import Project, ProjectConfig
+from app.models.user import Organization, User
 from app.schemas.onboarding_schema import (
     CTOAssignmentPatchRequest,
     DepartmentOption,
@@ -22,6 +25,7 @@ from app.schemas.onboarding_schema import (
     OnboardingContactResponse,
     TeamOnboardingConfigRequest,
     TeamOnboardingConfigResponse,
+    TeamPersonaAssignment,
 )
 from app.services.onboarding_service import OnboardingService
 
@@ -106,6 +110,110 @@ async def get_team_config(
     return onboarding_service.get_team_config(org_id)
 
 
+_ROLE_DESCRIPTIONS: dict[str, str] = {
+    "cto": "Top-level orchestrator. Decomposes user requests into department tasks.",
+    "engineering_manager": "Orchestrates engineering specialists. Reviews code and coordinates releases.",
+    "frontend_dev": "Builds React components, implements UI designs, manages frontend state.",
+    "backend_architect": "Designs and implements API endpoints, database schemas, and service logic.",
+    "devops": "Manages CI/CD pipelines, infrastructure, and deployment workflows.",
+    "qa_tester": "Writes and runs tests, validates code quality, catches regressions.",
+    "marketing_manager": "Orchestrates marketing campaigns and growth initiatives.",
+    "growth_analyst": "Tracks growth metrics, optimizes funnels, recommends budget allocation.",
+    "product_manager": "Manages product roadmap, prioritizes features, coordinates with stakeholders.",
+    "product_ops": "Synthesizes roadmap signals and keeps product rituals coordinated.",
+    "support_manager": "Orchestrates customer-facing agents: triages feedback, escalates to product/engineering.",
+    "customer_support": "Primary AI agent for product-user chat: answers how-to questions, collects issues.",
+}
+
+_TOKEN_BUDGETS: dict[str, int] = {
+    "cto": 200_000,
+    "manager": 100_000,
+    "specialist": 75_000,
+}
+
+
+async def _ensure_default_project(org_id: UUID, budget_usd: float, db: AsyncSession) -> Project:
+    """Return the first project for the org, creating one if none exists."""
+    result = await db.execute(
+        select(Project).where(Project.organization_id == org_id).limit(1)
+    )
+    project = result.scalar_one_or_none()
+    if project is not None:
+        if project.config:
+            project.config.monthly_budget_usd = budget_usd
+        return project
+
+    org = (await db.execute(select(Organization).where(Organization.id == org_id))).scalar_one()
+    project = Project(
+        organization_id=org_id,
+        name=f"{org.name}'s project",
+        slug=f"{org.slug}-default",
+        description="Default project created during onboarding",
+    )
+    db.add(project)
+    await db.flush()
+
+    config = ProjectConfig(
+        project_id=project.id,
+        monthly_budget_usd=budget_usd,
+    )
+    db.add(config)
+    return project
+
+
+async def _persist_agents(
+    project_id: UUID,
+    cto_assignment: TeamPersonaAssignment | None,
+    assignments: list[TeamPersonaAssignment],
+    db: AsyncSession,
+) -> None:
+    """Delete existing agents for the project and recreate from onboarding config."""
+    existing = await db.execute(
+        select(AgentConfig).where(AgentConfig.project_id == project_id)
+    )
+    for agent in existing.scalars().all():
+        await db.delete(agent)
+    await db.flush()
+
+    agent_id_map: dict[str, UUID] = {}
+    all_assignments: list[TeamPersonaAssignment] = []
+    if cto_assignment:
+        all_assignments.append(cto_assignment)
+    all_assignments.extend(assignments)
+
+    for assignment in all_assignments:
+        db_id = uuid4()
+        agent_id_map[assignment.agent_id] = db_id
+
+        parent_db_id = (
+            agent_id_map.get(assignment.parent_agent_id)
+            if assignment.parent_agent_id
+            else None
+        )
+
+        description = _ROLE_DESCRIPTIONS.get(assignment.role, "")
+        token_budget = _TOKEN_BUDGETS.get(assignment.hierarchy_level, 75_000)
+
+        agent = AgentConfig(
+            id=db_id,
+            project_id=project_id,
+            name=assignment.replica_name,
+            role=assignment.role,
+            department=assignment.department,
+            hierarchy_level=assignment.hierarchy_level,
+            parent_agent_id=parent_db_id,
+            daily_token_budget=token_budget,
+            description=description,
+            current_focus="Standing by for new delegation.",
+            email=f"{assignment.role.replace('_', '.')}@sweaas.dev",
+            replica_id=assignment.replica_id,
+            poster_image_url=assignment.poster_image_url,
+            thumbnail_video_url=assignment.thumbnail_video_url or None,
+            start_date=date.today(),
+        )
+        db.add(agent)
+
+
 @router.put("/team-config", response_model=TeamOnboardingConfigResponse)
 async def save_team_config(
     request: TeamOnboardingConfigRequest,
@@ -113,12 +221,24 @@ async def save_team_config(
     db: Annotated[AsyncSession, Depends(get_db)],
     onboarding_service: Annotated[OnboardingService, Depends(get_onboarding_service)],
 ) -> TeamOnboardingConfigResponse:
-    """Persist the workspace team onboarding selections."""
+    """Persist the workspace team onboarding selections and create agent rows."""
     org_id = await _resolve_org_id(user, db)
     try:
-        return onboarding_service.save_team_config(org_id, request)
+        result = onboarding_service.save_team_config(org_id, request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    org_uuid = UUID(org_id)
+    project = await _ensure_default_project(org_uuid, request.overall_budget_usd, db)
+    await _persist_agents(project.id, request.cto_assignment, request.assignments, db)
+
+    stmt = select(User).where(User.supabase_uid == user.uid)
+    db_user = (await db.execute(stmt)).scalar_one_or_none()
+    if db_user and not db_user.onboarding_completed:
+        db_user.onboarding_completed = True
+
+    await db.commit()
+    return result
 
 
 @router.patch("/team-config/cto", response_model=TeamOnboardingConfigResponse)

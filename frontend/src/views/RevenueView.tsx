@@ -196,7 +196,10 @@ export default function RevenueView() {
                     fontSize: 12,
                     boxShadow: "0 2px 8px rgba(31,22,56,0.08)",
                   }}
-                  formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
+                  formatter={(value) => [
+                    `$${Number(value ?? 0).toFixed(2)}`,
+                    "",
+                  ]}
                 />
                 <Area
                   type="monotone"

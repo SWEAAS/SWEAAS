@@ -21,7 +21,7 @@ import { lazy, Suspense, useEffect } from "react";
 const HQView = lazy(() => import("./three/HQView"));
 const WelcomeHWView = lazy(() => import("./three/WelcomeHWView"));
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, requireOnboarding = true }: { children: React.ReactNode; requireOnboarding?: boolean }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const initialized = useAuthStore((s) => s.initialized);
@@ -42,6 +42,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (requireOnboarding && user && !user.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -80,6 +83,15 @@ export default function App() {
           <Route path="/auth/callback" element={<AuthCallbackView />} />
 
           <Route
+            path="/onboarding"
+            element={
+              <ProtectedRoute requireOnboarding={false}>
+                <OnboardingView />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             element={
               <ProtectedRoute>
                 <AppLayout />
@@ -87,7 +99,6 @@ export default function App() {
             }
           >
             <Route path="/dashboard" element={<DashboardView />} />
-            <Route path="/onboarding" element={<OnboardingView />} />
             <Route
               path="/hq"
               element={

@@ -9,12 +9,16 @@ class AgentSummary(BaseModel):
     agent_id: str
     name: str
     role: str
-    department: Literal["engineering", "marketing", "product", "support"]
+    department: str
     hierarchy_level: str
-    status: Literal["active", "warning", "paused", "strike"]
+    status: str
     daily_token_budget: int
     tokens_used_today: int
     current_focus: str = ""
+    parent_agent_id: str | None = None
+    replica_id: str | None = None
+    poster_image_url: str | None = None
+    thumbnail_video_url: str | None = None
 
 
 class AgentActivity(BaseModel):

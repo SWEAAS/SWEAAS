@@ -88,10 +88,10 @@ export default function ReportsView() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchAgents();
+    fetchAgents(currentProject?.id);
     fetchProjects();
     fetchConfig();
-  }, [fetchAgents, fetchProjects, fetchConfig]);
+  }, [fetchAgents, fetchProjects, fetchConfig, currentProject?.id]);
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -99,7 +99,7 @@ export default function ReportsView() {
 
     Promise.all([
       orchestrationApi.reports(currentProject.id).catch(() => null),
-      observabilityApi.reports().catch(() => null),
+      observabilityApi.reports(currentProject.id).catch(() => null),
     ]).then(([orchRes, obsRes]) => {
       const orchReports: ApiReport[] = orchRes?.data?.reports ?? [];
       const obsReports: ApiReport[] = obsRes?.data?.reports ?? [];

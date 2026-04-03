@@ -2,11 +2,14 @@
 
 import logging
 from typing import Annotated
+from uuid import UUID
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.database import get_db
 from app.core.dependencies import get_budget_service
 from app.schemas.budget_schema import (
     AgentBudgetSnapshot,
@@ -28,11 +31,13 @@ def _stripe_webhook_secret_configured(secret: str) -> bool:
 
 
 @router.get("/summary", response_model=BudgetSummaryResponse)
-def get_summary(
+async def get_summary(
     budget_service: Annotated[BudgetService, Depends(get_budget_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    project_id: UUID | None = Query(default=None),
 ) -> BudgetSummaryResponse:
     """Overview of token consumption across all agents."""
-    return budget_service.get_summary()
+    return await budget_service.get_summary(db, project_id=project_id)
 
 
 @router.post("/estimate", response_model=BudgetEstimateResponse)
@@ -45,12 +50,13 @@ def estimate_budget(
 
 
 @router.get("/agents/{agent_id}", response_model=AgentBudgetSnapshot)
-def get_agent_consumption(
-    agent_id: str,
+async def get_agent_consumption(
+    agent_id: UUID,
     budget_service: Annotated[BudgetService, Depends(get_budget_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AgentBudgetSnapshot:
     """Get token consumption details for a specific agent."""
-    snapshot = budget_service.get_agent_consumption(agent_id)
+    snapshot = await budget_service.get_agent_consumption(db, agent_id)
     if snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found.")
     return snapshot

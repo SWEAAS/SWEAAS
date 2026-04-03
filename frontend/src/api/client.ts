@@ -33,7 +33,8 @@ export default api;
 // ── Agent API ────────────────────────────────────────────────────
 
 export const agentApi = {
-  list: () => api.get("/agents"),
+  list: (projectId?: string) =>
+    api.get("/agents", { params: projectId ? { project_id: projectId } : {} }),
   get: (id: string) => api.get(`/agents/${id}`),
   activity: (id: string) => api.get(`/agents/${id}/activity`),
   chat: (
@@ -46,7 +47,8 @@ export const agentApi = {
 // ── Budget API ───────────────────────────────────────────────────
 
 export const budgetApi = {
-  summary: () => api.get("/budget/summary"),
+  summary: (projectId?: string) =>
+    api.get("/budget/summary", { params: projectId ? { project_id: projectId } : {} }),
   estimate: (data: {
     seat_count: number;
     monthly_budget_usd: number;
@@ -149,8 +151,10 @@ export const onboardingApi = {
 // ── Observability API ────────────────────────────────────────────
 
 export const observabilityApi = {
-  overview: () => api.get("/observability/overview"),
-  reports: () => api.get("/observability/reports"),
+  overview: (projectId?: string) =>
+    api.get("/observability/overview", { params: projectId ? { project_id: projectId } : {} }),
+  reports: (projectId?: string) =>
+    api.get("/observability/reports", { params: projectId ? { project_id: projectId } : {} }),
   sentryIssues: () => api.get("/observability/sentry/issues"),
 };
 
@@ -252,6 +256,14 @@ export interface TavusReconciliationResponse {
   missing_in_database: TavusReconciliationItem[];
   updates_to_stored_replica: TavusReconciliationItem[];
 }
+
+// ── Organization API ─────────────────────────────────────────────
+
+export const organizationApi = {
+  list: () => api.get("/organizations"),
+  update: (orgId: string, data: { name: string }) =>
+    api.patch(`/organizations/${orgId}`, data),
+};
 
 // ── Stripe Connect API ──────────────────────────────────────────
 

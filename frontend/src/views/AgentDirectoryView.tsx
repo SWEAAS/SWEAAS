@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MessageSquareText, Phone, Search, Sparkles, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAgentStore, type Agent } from "../store/agentStore";
+import { useProjectStore } from "../store/projectStore";
 import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 
@@ -14,17 +15,19 @@ function getInitials(name: string) {
     .join("");
 }
 
-function hashSeed(value: string) {
-  return value.split("").reduce((total, char) => total + char.charCodeAt(0), 0);
-}
-
-function portraitUrlForAgent(agent: Pick<Agent, "agent_id" | "poster_image_url">) {
+function portraitUrlForAgent(agent: Pick<Agent, "agent_id" | "poster_image_url" | "name">) {
   if (agent.poster_image_url) {
     return agent.poster_image_url;
   }
 
-  const seed = (hashSeed(agent.agent_id) % 70) + 1;
-  return `https://i.pravatar.cc/480?img=${seed}`;
+  const initials =
+    agent.name
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .map((w: string) => w[0])
+      .join("")
+      .slice(0, 2) || "AG";
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&size=480&background=7c5cff&color=fff&bold=true`;
 }
 
 function formatTokenCount(value: number) {
@@ -100,13 +103,14 @@ export default function AgentDirectoryView() {
   const navigate = useNavigate();
   const { agents, fetchAgents } = useAgentStore();
   const { config, fetchConfig } = useTeamOnboardingStore();
+  const { currentProject } = useProjectStore();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
 
   useEffect(() => {
-    void fetchAgents();
+    void fetchAgents(currentProject?.id);
     void fetchConfig();
-  }, [fetchAgents, fetchConfig]);
+  }, [fetchAgents, fetchConfig, currentProject?.id]);
 
   const directoryAgents = useMemo(() => mergeAgentsWithTeamConfig(agents, config), [agents, config]);
 

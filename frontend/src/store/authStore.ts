@@ -8,6 +8,7 @@ export interface User {
   full_name: string;
   github_username: string;
   role: string;
+  onboarding_completed: boolean;
 }
 
 interface AuthState {
@@ -156,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           full_name: profile.full_name ?? profile.name ?? "User",
           github_username: profile.github_username ?? "",
           role: profile.role ?? "authenticated",
+          onboarding_completed: profile.onboarding_completed ?? false,
         },
       });
     } catch {
@@ -167,6 +169,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             full_name: "Dev User",
             github_username: "",
             role: "owner",
+            onboarding_completed: false,
           },
         });
       }

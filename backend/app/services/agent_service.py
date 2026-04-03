@@ -1,8 +1,13 @@
 """Domain logic for agent directory, status, and chat relay."""
 
 import logging
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import llm_completion, llm_has_credentials
+from app.models.agent import AgentConfig, AgentSession
 from app.schemas.agent_schema import (
     AgentActivity,
     AgentChatRequest,
@@ -10,11 +15,9 @@ from app.schemas.agent_schema import (
     AgentDetail,
     AgentSummary,
 )
-from app.services.seed_data import AGENTS
 
 logger = logging.getLogger(__name__)
 
-# Stable ID for the product-facing support agent (chat with end users).
 CUSTOMER_SUPPORT_AGENT_ID = "sup-cs-01"
 
 _DEPT_CONTEXT = {
@@ -40,11 +43,11 @@ _DEPT_CONTEXT = {
 }
 
 
-def _build_system_prompt(agent: dict) -> str:
-    dept_ctx = _DEPT_CONTEXT.get(agent["department"], "")
-    focus = agent.get("current_focus", "")
+def _build_system_prompt(agent: AgentConfig) -> str:
+    dept_ctx = _DEPT_CONTEXT.get(agent.department, "")
+    focus = agent.current_focus or ""
     return (
-        f"You are {agent['name']}, a {agent['role'].replace('_', ' ')} at SWEAAS. "
+        f"You are {agent.name}, a {agent.role.replace('_', ' ')} at SWEAAS. "
         f"{dept_ctx}\n\n"
         f"Your current focus: {focus}\n\n"
         "Respond in first person as this agent. Be helpful, concise, and stay in character. "
@@ -53,35 +56,106 @@ def _build_system_prompt(agent: dict) -> str:
     )
 
 
+def _agent_to_summary(agent: AgentConfig) -> AgentSummary:
+    return AgentSummary(
+        agent_id=str(agent.id),
+        name=agent.name,
+        role=agent.role,
+        department=agent.department,
+        hierarchy_level=agent.hierarchy_level or "specialist",
+        status=agent.status or "active",
+        daily_token_budget=agent.daily_token_budget,
+        tokens_used_today=agent.tokens_used_today,
+        current_focus=agent.current_focus or "",
+        parent_agent_id=str(agent.parent_agent_id) if agent.parent_agent_id else None,
+        replica_id=agent.replica_id,
+        poster_image_url=agent.poster_image_url,
+        thumbnail_video_url=agent.thumbnail_video_url,
+    )
+
+
 class AgentService:
-    """Provides agent directory, activity data, and chat relay."""
+    """Provides agent directory, activity data, and chat relay using the database."""
 
-    def list_agents(self) -> list[AgentSummary]:
-        return [AgentSummary(**self._to_summary(agent)) for agent in AGENTS]
+    async def list_agents(self, db: AsyncSession, project_id: UUID | None = None) -> list[AgentSummary]:
+        stmt = select(AgentConfig)
+        if project_id:
+            stmt = stmt.where(AgentConfig.project_id == project_id)
+        stmt = stmt.order_by(AgentConfig.created_at)
+        result = await db.execute(stmt)
+        return [_agent_to_summary(agent) for agent in result.scalars().all()]
 
-    def get_agent(self, agent_id: str) -> AgentDetail | None:
-        agent = self._get_agent_record(agent_id)
+    async def get_agent(self, db: AsyncSession, agent_id: UUID) -> AgentDetail | None:
+        agent = await db.get(AgentConfig, agent_id)
         if agent is None:
             return None
-        return AgentDetail(**agent)
 
-    def list_activity(self, agent_id: str) -> list[AgentActivity]:
-        agent = self._get_agent_record(agent_id)
-        if agent is None:
-            return []
-        return [AgentActivity(**activity) for activity in agent["recent_activity"]]
+        sessions = await db.execute(
+            select(AgentSession)
+            .where(AgentSession.agent_id == agent.id)
+            .order_by(AgentSession.started_at.desc())
+            .limit(10)
+        )
+        activities = [
+            AgentActivity(
+                agent_id=str(agent.id),
+                activity_id=str(s.id),
+                title=f"Session {s.status}",
+                detail=f"Sandbox: {s.sandbox_id or 'local'}",
+                state="running" if s.status == "running" else "completed",
+                started_at=s.started_at.isoformat() if s.started_at else "",
+            )
+            for s in sessions.scalars().all()
+        ]
 
-    async def chat(self, agent_id: str, request: AgentChatRequest) -> AgentChatResponse:
-        """Send a message to an agent and get a real LLM response.
+        return AgentDetail(
+            agent_id=str(agent.id),
+            name=agent.name,
+            role=agent.role,
+            department=agent.department,
+            hierarchy_level=agent.hierarchy_level or "specialist",
+            status=agent.status or "active",
+            daily_token_budget=agent.daily_token_budget,
+            tokens_used_today=agent.tokens_used_today,
+            current_focus=agent.current_focus or "",
+            description=agent.description or "",
+            strike_count=agent.strike_count,
+            parent_agent_id=str(agent.parent_agent_id) if agent.parent_agent_id else None,
+            email=agent.email,
+            pronouns=agent.pronouns,
+            location=agent.location,
+            timezone=agent.timezone,
+            start_date=agent.start_date.isoformat() if agent.start_date else None,
+            recent_activity=activities,
+            replica_id=agent.replica_id,
+            poster_image_url=agent.poster_image_url,
+            thumbnail_video_url=agent.thumbnail_video_url,
+        )
 
-        Uses the configured LLM (default: xAI Grok) with the agent's persona
-        as the system prompt. Budget is tracked automatically via the budget tracker.
-        Falls back to a stub acknowledgement when no LLM credentials are configured.
-        """
-        agent = self._get_agent_record(agent_id)
+    async def list_activity(self, db: AsyncSession, agent_id: UUID) -> list[AgentActivity]:
+        sessions = await db.execute(
+            select(AgentSession)
+            .where(AgentSession.agent_id == agent_id)
+            .order_by(AgentSession.started_at.desc())
+            .limit(20)
+        )
+        return [
+            AgentActivity(
+                agent_id=str(agent_id),
+                activity_id=str(s.id),
+                title=f"Session {s.status}",
+                detail=f"Sandbox: {s.sandbox_id or 'local'}",
+                state="running" if s.status == "running" else "completed",
+                started_at=s.started_at.isoformat() if s.started_at else "",
+            )
+            for s in sessions.scalars().all()
+        ]
+
+    async def chat(self, db: AsyncSession, agent_id: UUID, request: AgentChatRequest) -> AgentChatResponse:
+        agent = await db.get(AgentConfig, agent_id)
         if agent is None or not llm_has_credentials():
             return AgentChatResponse(
-                agent_id=agent_id,
+                agent_id=str(agent_id),
                 response=f"[{agent_id}] Acknowledged: {request.message[:100]}",
                 context_injected=False,
             )
@@ -95,32 +169,16 @@ class AgentService:
         messages.append({"role": "user", "content": request.message})
 
         try:
-            result = await llm_completion(messages=messages, agent_id=agent_id)
+            result = await llm_completion(messages=messages, agent_id=str(agent_id))
             return AgentChatResponse(
-                agent_id=agent_id,
+                agent_id=str(agent_id),
                 response=result.content,
                 context_injected=True,
             )
         except Exception:
             logger.exception("LLM chat failed for agent %s", agent_id)
             return AgentChatResponse(
-                agent_id=agent_id,
+                agent_id=str(agent_id),
                 response="I'm temporarily unavailable. Please try again in a moment.",
                 context_injected=False,
             )
-
-    def _get_agent_record(self, agent_id: str) -> dict | None:
-        return next((agent for agent in AGENTS if agent["agent_id"] == agent_id), None)
-
-    def _to_summary(self, agent: dict) -> dict:
-        return {
-            "agent_id": agent["agent_id"],
-            "name": agent["name"],
-            "role": agent.get("role", "specialist"),
-            "department": agent["department"],
-            "hierarchy_level": agent.get("hierarchy_level", "specialist"),
-            "status": agent["status"],
-            "daily_token_budget": agent["daily_token_budget"],
-            "tokens_used_today": agent["tokens_used_today"],
-            "current_focus": agent.get("current_focus", ""),
-        }

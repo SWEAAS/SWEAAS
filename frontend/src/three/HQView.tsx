@@ -5,17 +5,19 @@ import HQScene from "./HQScene";
 import AgentChatPanel from "./ui/AgentChatPanel";
 import TokenBurnOverlay from "./ui/TokenBurnOverlay";
 import { useAgentStore, type Agent } from "../store/agentStore";
+import { useProjectStore } from "../store/projectStore";
 import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 
 export default function HQView() {
   const { agents, fetchAgents } = useAgentStore();
   const { config, fetchConfig } = useTeamOnboardingStore();
+  const { currentProject } = useProjectStore();
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
   const [cameraMode, setCameraMode] = useState<"overview" | "walkthrough">("overview");
   const navigate = useNavigate();
 
-  useEffect(() => { fetchAgents(); fetchConfig(); }, [fetchAgents, fetchConfig]);
+  useEffect(() => { fetchAgents(currentProject?.id); fetchConfig(); }, [fetchAgents, fetchConfig, currentProject?.id]);
 
   const displayAgents = useMemo(
     () => mergeAgentsWithTeamConfig(agents, config),

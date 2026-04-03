@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { communicationApi } from "../api/client";
 import { getFeaturedReplicas } from "../components/cto-page/replicaUtils";
 import type { TavusReplica } from "../components/cto-page/types";
+import { useAuthStore } from "../store/authStore";
 import {
   MAX_ORG_SIZE,
   useTeamOnboardingStore,
@@ -37,6 +38,8 @@ function formatCurrency(value: number) {
 export default function OnboardingView() {
   const navigate = useNavigate();
   const { config, fetchConfig, saveConfig, saving, error } = useTeamOnboardingStore();
+  const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<Step>("company");
   const [replicas, setReplicas] = useState<TavusReplica[]>([]);
   const [replicasLoading, setReplicasLoading] = useState(false);
@@ -162,6 +165,7 @@ export default function OnboardingView() {
       } catch {
         /* preferences will use defaults — non-blocking */
       }
+      await fetchProfile();
       navigate("/dashboard");
     }
   }
@@ -576,20 +580,23 @@ export default function OnboardingView() {
         ) : null}
 
         <div className="mt-8 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              if (currentIdx === 0) {
-                navigate("/dashboard");
-                return;
-              }
-              setStep(steps[currentIdx - 1]?.key ?? "company");
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-[#ece7f5] px-4 text-[13px] font-medium text-[#675f7e] transition-colors hover:bg-[#faf8fd] hover:text-[#1f1638]"
-          >
-            <ArrowLeft size={15} />
-            {currentIdx === 0 ? "Back to dashboard" : "Back"}
-          </button>
+          {(currentIdx > 0 || user?.onboarding_completed) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (currentIdx === 0) {
+                  navigate("/dashboard");
+                  return;
+                }
+                setStep(steps[currentIdx - 1]?.key ?? "company");
+              }}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-[#ece7f5] px-4 text-[13px] font-medium text-[#675f7e] transition-colors hover:bg-[#faf8fd] hover:text-[#1f1638]"
+            >
+              <ArrowLeft size={15} />
+              {currentIdx === 0 ? "Back to dashboard" : "Back"}
+            </button>
+          )}
+          {currentIdx === 0 && !user?.onboarding_completed && <div />}
 
           {step !== "review" ? (
             <button

@@ -22,6 +22,7 @@ import { useAuthStore } from "../store/authStore";
 import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import AgentChatPanel from "../three/ui/AgentChatPanel";
 import { useAgentStore, type Agent } from "../store/agentStore";
+import { useProjectStore } from "../store/projectStore";
 import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
 
 const departmentStyles: Record<
@@ -94,16 +95,11 @@ function getInitials(name: string) {
     .join("");
 }
 
-function hashSeed(value: string) {
-  return value.split("").reduce((total, char) => total + char.charCodeAt(0), 0);
-}
-
 function portraitUrlForAgent(agent: Pick<Agent, "agent_id" | "poster_image_url">) {
   if (agent.poster_image_url) {
     return agent.poster_image_url;
   }
-  const seed = (hashSeed(agent.agent_id) % 70) + 1;
-  return `https://i.pravatar.cc/480?img=${seed}`;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(agent.agent_id.slice(0, 2))}&size=480&background=7c5cff&color=fff&bold=true`;
 }
 
 function usagePercent(agent: Agent) {
@@ -271,10 +267,12 @@ export default function OrgChartView() {
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
   const navigate = useNavigate();
 
+  const { currentProject } = useProjectStore();
+
   useEffect(() => {
-    void fetchAgents();
+    void fetchAgents(currentProject?.id);
     void fetchConfig();
-  }, [fetchAgents, fetchConfig]);
+  }, [fetchAgents, fetchConfig, currentProject?.id]);
 
   const displayAgents = useMemo(() => mergeAgentsWithTeamConfig(agents, config), [agents, config]);
   const { root, childrenByParent, parentById } = useMemo(() => buildOrgTree(displayAgents), [displayAgents]);

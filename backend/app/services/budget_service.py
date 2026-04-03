@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
+
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.llm_budget import budget_tracker
+from app.models.agent import AgentConfig
+from app.models.project import ProjectConfig
 from app.schemas.budget_schema import (
     AgentBudgetSnapshot,
     BudgetEstimateRequest,
@@ -14,11 +19,8 @@ from app.schemas.budget_schema import (
     BudgetSummaryResponse,
     StripeCheckoutResponse,
 )
-from app.services.seed_data import AGENTS
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -28,22 +30,33 @@ _alerted_agents: set[str] = set()
 
 
 class BudgetService:
-    """Token consumption tracking and budget estimation.
+    """Token consumption tracking and budget estimation using database-backed agents."""
 
-    Reads live usage from ``BudgetTracker`` when initialised, falling back
-    to seed data for agent metadata.
-    """
+    async def get_summary(self, db: "AsyncSession", project_id: UUID | None = None) -> BudgetSummaryResponse:
+        stmt = select(AgentConfig)
+        if project_id:
+            stmt = stmt.where(AgentConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        agents = result.scalars().all()
 
-    def get_summary(self) -> BudgetSummaryResponse:
-        agent_snapshots = [self._build_snapshot(agent) for agent in AGENTS]
+        agent_snapshots = [self._build_snapshot(agent) for agent in agents]
         total_budget = sum(s.token_budget for s in agent_snapshots)
         total_used = sum(s.tokens_used for s in agent_snapshots)
         consumption_pct = (
             round((total_used / total_budget) * 100, 2) if total_budget else 0.0
         )
 
+        monthly_budget_usd = 0.0
+        if project_id:
+            cfg_result = await db.execute(
+                select(ProjectConfig).where(ProjectConfig.project_id == project_id)
+            )
+            project_config = cfg_result.scalar_one_or_none()
+            if project_config:
+                monthly_budget_usd = project_config.monthly_budget_usd or 0.0
+
         return BudgetSummaryResponse(
-            total_monthly_budget_usd=24_000.0,
+            total_monthly_budget_usd=monthly_budget_usd,
             total_tokens_consumed=total_used,
             total_token_budget=total_budget,
             consumption_percent=consumption_pct,
@@ -52,19 +65,23 @@ class BudgetService:
 
     async def check_budget_thresholds_and_notify(
         self,
-        user_id: "UUID",
-        org_id: "UUID",
+        user_id: UUID,
+        org_id: UUID,
         project_id: str | None,
         db: "AsyncSession",
     ) -> None:
-        """Check all agents against budget thresholds and fire notifications."""
         from app.services.notification_service import NotificationService
 
         notification_service = NotificationService()
 
-        for agent in AGENTS:
+        stmt = select(AgentConfig)
+        if project_id:
+            stmt = stmt.where(AgentConfig.project_id == UUID(project_id))
+        result = await db.execute(stmt)
+
+        for agent in result.scalars().all():
             snapshot = self._build_snapshot(agent)
-            alert_key = f"{agent['agent_id']}:{snapshot.usage_percent:.0f}"
+            alert_key = f"{agent.id}:{snapshot.usage_percent:.0f}"
 
             if snapshot.usage_percent >= 85.0 and alert_key not in _alerted_agents:
                 _alerted_agents.add(alert_key)
@@ -73,14 +90,14 @@ class BudgetService:
                         user_id=user_id,
                         org_id=org_id,
                         project_id=project_id,
-                        agent_name=agent["name"],
+                        agent_name=agent.name,
                         usage_percent=snapshot.usage_percent,
                         db=db,
                     )
                 except Exception:
                     logger.warning(
                         "Failed to send budget notification for agent %s",
-                        agent["agent_id"],
+                        agent.id,
                         exc_info=True,
                     )
 
@@ -111,8 +128,8 @@ class BudgetService:
             notes=notes,
         )
 
-    def get_agent_consumption(self, agent_id: str) -> AgentBudgetSnapshot | None:
-        agent = next((r for r in AGENTS if r["agent_id"] == agent_id), None)
+    async def get_agent_consumption(self, db: "AsyncSession", agent_id: UUID) -> AgentBudgetSnapshot | None:
+        agent = await db.get(AgentConfig, agent_id)
         if agent is None:
             return None
         return self._build_snapshot(agent)
@@ -120,11 +137,6 @@ class BudgetService:
     async def create_checkout_session(
         self, project_id: str, price_id: str
     ) -> StripeCheckoutResponse:
-        """Create a direct Stripe Checkout session (non-Connect, for SWEAAS subscriptions).
-
-        For Connect destination-charge checkout, use the /stripe/checkout endpoint
-        which routes through StripeConnectService.
-        """
         if not settings.stripe_secret_key:
             return StripeCheckoutResponse(
                 checkout_url="https://checkout.stripe.com/dev-placeholder",
@@ -145,8 +157,8 @@ class BudgetService:
         )
         return StripeCheckoutResponse(checkout_url=session.url, session_id=session.id)
 
-    def _build_snapshot(self, agent: dict) -> AgentBudgetSnapshot:
-        aid = agent["agent_id"]
+    def _build_snapshot(self, agent: AgentConfig) -> AgentBudgetSnapshot:
+        aid = str(agent.id)
         live = budget_tracker.get_snapshot(aid) if budget_tracker.is_initialised else None
 
         if live:
@@ -154,9 +166,9 @@ class BudgetService:
             token_budget = live["daily_token_budget"]
             strike_count = live["strike_count"]
         else:
-            tokens_used = agent["tokens_used_today"]
-            token_budget = agent["daily_token_budget"]
-            strike_count = agent.get("strike_count", 0)
+            tokens_used = agent.tokens_used_today
+            token_budget = agent.daily_token_budget
+            strike_count = agent.strike_count
 
         usage_pct = round((tokens_used / token_budget) * 100, 2) if token_budget else 0.0
 
@@ -172,7 +184,7 @@ class BudgetService:
 
         return AgentBudgetSnapshot(
             agent_id=aid,
-            name=agent["name"],
+            name=agent.name,
             token_budget=token_budget,
             tokens_used=tokens_used,
             usage_percent=usage_pct,
@@ -181,7 +193,6 @@ class BudgetService:
         )
 
     def handle_stripe_webhook_event(self, event: dict[str, Any]) -> str:
-        """Log and branch on Stripe webhook types; extend to persist subscription IDs."""
         etype = event.get("type", "")
         eid = event.get("id", "")
         obj = (event.get("data") or {}).get("object") or {}

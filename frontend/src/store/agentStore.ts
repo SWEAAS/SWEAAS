@@ -23,7 +23,7 @@ interface AgentState {
   agents: Agent[];
   selectedAgent: Agent | null;
   loading: boolean;
-  fetchAgents: () => Promise<void>;
+  fetchAgents: (projectId?: string) => Promise<void>;
   selectAgent: (agent: Agent | null) => void;
 }
 
@@ -32,10 +32,10 @@ export const useAgentStore = create<AgentState>((set) => ({
   selectedAgent: null,
   loading: false,
 
-  fetchAgents: async () => {
+  fetchAgents: async (projectId?: string) => {
     set({ loading: true });
     try {
-      const res = await agentApi.list();
+      const res = await agentApi.list(projectId);
       set({ agents: res.data, loading: false });
     } catch {
       set({ loading: false });

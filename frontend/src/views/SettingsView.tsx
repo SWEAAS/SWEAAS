@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Bell, CheckCircle, Palette, RefreshCw, Save, Settings2, Sparkles, Video } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, Bell, CheckCircle, Palette, RefreshCw, Save, Settings2, Sparkles, Users, Video } from "lucide-react";
 import {
   communicationApi,
   notificationApi,
@@ -11,6 +12,7 @@ import {
 import { useAuthStore } from "../store/authStore";
 import { useNotificationStore } from "../store/notificationStore";
 import { useProjectStore } from "../store/projectStore";
+import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import { useThemeStore } from "../store/themeStore";
 
 const PRESET_COLOURS = [
@@ -26,16 +28,19 @@ const inputClass =
   "w-full rounded-[12px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3 text-[14px] text-[#1f1638] font-[inherit] outline-none transition-colors focus:border-[var(--brand-border)] focus:bg-white";
 
 export default function SettingsView() {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const { currentProject, projects, fetchProjects, setCurrentProject } = useProjectStore();
   const { brandHex, setBrand } = useThemeStore();
-  const [config, setConfig] = useState({
-    monthly_budget_usd: 2000,
-    timeline_weeks: 8,
-    departments: ["engineering", "product"],
-    max_agents: 6,
-    github_username: "",
-  });
+  const { config: teamConfig, fetchConfig: fetchTeamConfig } = useTeamOnboardingStore();
+  const [configLoading, setConfigLoading] = useState(true);
+  const [config, setConfig] = useState<{
+    monthly_budget_usd: number;
+    timeline_weeks: number;
+    departments: string[];
+    max_agents: number;
+    github_username: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,27 +63,29 @@ export default function SettingsView() {
 
   const isAdmin = useMemo(() => {
     const role = (user?.role ?? "").toLowerCase();
-    return user?.email === "user@sweaas.dev" || role === "owner" || role === "admin";
-  }, [user?.email, user?.role]);
+    return role === "owner" || role === "admin";
+  }, [user?.role]);
 
-  useEffect(() => { fetchProjects(); }, [fetchProjects]);
+  useEffect(() => { fetchProjects(); fetchTeamConfig(); }, [fetchProjects, fetchTeamConfig]);
   useEffect(() => { fetchPreferences(); }, [fetchPreferences]);
 
   useEffect(() => {
     if (!currentProject?.id) return;
+    setConfigLoading(true);
     projectApi.get(currentProject.id).then((res) => {
       const proj = res.data;
       const cfg = proj?.config ?? proj;
-      setConfig((prev) => ({
-        monthly_budget_usd: cfg.monthly_budget_usd ?? cfg.monthly_budget ?? prev.monthly_budget_usd,
-        timeline_weeks: cfg.timeline_weeks ?? prev.timeline_weeks,
+      setConfig({
+        monthly_budget_usd: cfg.monthly_budget_usd ?? cfg.monthly_budget ?? 0,
+        timeline_weeks: cfg.timeline_weeks ?? 4,
         departments: cfg.departments
           ? (typeof cfg.departments === "string" ? cfg.departments.split(",").map((s: string) => s.trim()) : cfg.departments)
-          : prev.departments,
-        max_agents: cfg.max_agents ?? prev.max_agents,
-        github_username: cfg.github_username ?? prev.github_username,
-      }));
-    }).catch(() => { /* project may not have config yet */ });
+          : [],
+        max_agents: cfg.max_agents ?? 0,
+        github_username: cfg.github_username ?? "",
+      });
+    }).catch(() => { /* project may not have config yet */ })
+      .finally(() => setConfigLoading(false));
   }, [currentProject?.id]);
 
   const handleNotifSave = async () => {
@@ -115,7 +122,7 @@ export default function SettingsView() {
   };
 
   const handleSave = async () => {
-    if (!currentProject) return;
+    if (!currentProject || !config) return;
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -470,6 +477,58 @@ export default function SettingsView() {
         )}
       </section>
 
+      {/* ── Onboarding preferences ─────────────────────────────── */}
+      <section className="rounded-[28px] border border-[#ece7f5] bg-white p-6 shadow-[0_16px_42px_-34px_rgba(42,26,92,0.25)]">
+        <div className="mb-6 flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px]" style={{ background: "var(--brand-chip)" }}>
+            <Users size={15} className="text-[var(--brand)]" />
+          </div>
+          <div>
+            <p className="text-[13px] font-bold text-[#1f1638] m-0">Team Onboarding</p>
+            <p className="text-[11px] text-[#7a7390] m-0">Your AI team configuration</p>
+          </div>
+        </div>
+
+        {teamConfig.completed ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-[14px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7a7390]">Team size</p>
+                <p className="mt-1 text-[18px] font-semibold text-[#1f1638]">{teamConfig.company_size}</p>
+              </div>
+              <div className="rounded-[14px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7a7390]">Monthly budget</p>
+                <p className="mt-1 text-[18px] font-semibold text-[#1f1638]">${Math.round(teamConfig.overall_budget_usd).toLocaleString()}</p>
+              </div>
+              <div className="rounded-[14px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7a7390]">CTO</p>
+                <p className="mt-1 text-[18px] font-semibold text-[#1f1638]">{teamConfig.cto_assignment?.replica_name ?? "Not set"}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate("/onboarding")}
+              className="inline-flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-white"
+              style={{ background: "var(--brand)" }}
+            >
+              <Sparkles size={14} />
+              Edit team setup
+            </button>
+          </div>
+        ) : (
+          <div className="text-[13px] text-[#7a7390]">
+            <p>You haven't completed onboarding yet.</p>
+            <button
+              onClick={() => navigate("/onboarding")}
+              className="mt-3 inline-flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-semibold text-white"
+              style={{ background: "var(--brand)" }}
+            >
+              <Sparkles size={14} />
+              Complete onboarding
+            </button>
+          </div>
+        )}
+      </section>
+
       {!currentProject && (
         <div className="rounded-[16px] border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-700">
           No project selected. Create a project first via the Cto Call page.
@@ -488,13 +547,17 @@ export default function SettingsView() {
           </div>
         </div>
 
+        {configLoading || !config ? (
+          <div className="py-8 text-center text-[13px] text-[#7a7390]">Loading project configuration…</div>
+        ) : (
+        <>
         <div className="space-y-5">
           <div>
             <label className="mb-1.5 block text-[12px] font-semibold text-[#675f7e]">Monthly Budget (USD)</label>
             <input
               type="number"
               value={config.monthly_budget_usd}
-              onChange={(e) => setConfig((c) => ({ ...c, monthly_budget_usd: Number(e.target.value) }))}
+              onChange={(e) => setConfig((c) => c ? ({ ...c, monthly_budget_usd: Number(e.target.value) }) : c)}
               className={inputClass}
             />
             <p className="mt-1 text-[11px] text-[#7a7390]">
@@ -507,7 +570,7 @@ export default function SettingsView() {
             <input
               type="number"
               value={config.max_agents}
-              onChange={(e) => setConfig((c) => ({ ...c, max_agents: Number(e.target.value) }))}
+              onChange={(e) => setConfig((c) => c ? ({ ...c, max_agents: Number(e.target.value) }) : c)}
               className={inputClass}
             />
           </div>
@@ -521,7 +584,7 @@ export default function SettingsView() {
               min={1}
               max={52}
               value={config.timeline_weeks}
-              onChange={(e) => setConfig((c) => ({ ...c, timeline_weeks: Number(e.target.value) }))}
+              onChange={(e) => setConfig((c) => c ? ({ ...c, timeline_weeks: Number(e.target.value) }) : c)}
               className="w-full"
               style={{ accentColor: "var(--brand)" }}
             />
@@ -539,12 +602,12 @@ export default function SettingsView() {
                   <button
                     key={dept}
                     onClick={() =>
-                      setConfig((c) => ({
+                      setConfig((c) => c ? ({
                         ...c,
                         departments: active
                           ? c.departments.filter((d) => d !== dept)
                           : [...c.departments, dept],
-                      }))
+                      }) : c)
                     }
                     className="rounded-full border px-4 py-1.5 text-[12px] capitalize transition-all font-medium"
                     style={{
@@ -565,7 +628,7 @@ export default function SettingsView() {
             <input
               type="text"
               value={config.github_username}
-              onChange={(e) => setConfig((c) => ({ ...c, github_username: e.target.value }))}
+              onChange={(e) => setConfig((c) => c ? ({ ...c, github_username: e.target.value }) : c)}
               placeholder="your-github-handle"
               className={inputClass}
             />
@@ -579,7 +642,7 @@ export default function SettingsView() {
 
         <button
           onClick={handleSave}
-          disabled={saving || !currentProject}
+          disabled={saving || !currentProject || !config}
           className="mt-6 flex items-center gap-2 rounded-[12px] px-6 py-3 text-[14px] font-bold text-white transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: "var(--brand)" }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-dark)"; }}
@@ -591,6 +654,8 @@ export default function SettingsView() {
             <><Save size={16} /> {saving ? "Saving…" : "Save Settings"}</>
           )}
         </button>
+        </>
+        )}
       </section>
     </div>
     {syncModalOpen ? (

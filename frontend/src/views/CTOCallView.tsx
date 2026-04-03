@@ -527,7 +527,7 @@ export default function CTOCallView() {
   };
 
   useEffect(() => {
-    fetchAgents();
+    fetchAgents(currentProject?.id);
     fetchProjects();
     fetchConfig();
     fetchCtx();

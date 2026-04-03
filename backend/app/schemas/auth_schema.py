@@ -22,3 +22,4 @@ class UserProfile(BaseModel):
     full_name: str
     github_username: str
     role: str
+    onboarding_completed: bool = False

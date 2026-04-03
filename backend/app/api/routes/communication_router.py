@@ -36,9 +36,9 @@ from app.schemas.communication_schema import (
     TavusWarmCheckAttempt,
     TavusWarmCheckResponse,
 )
+from app.models.agent import AgentConfig
 from app.services.communication_service import CommunicationService
 from app.services.replica_catalog_service import ReplicaCatalogService
-from app.services.seed_data import AGENTS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/communication", tags=["communication"])
@@ -136,53 +136,42 @@ async def create_customer_call(
 @router.get("/cto-context")
 async def get_cto_context(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    """Return a live snapshot of agent activity for the CTO call side panel.
+    """Return a live snapshot of agent activity for the CTO call side panel."""
+    result = await db.execute(select(AgentConfig))
+    agents = result.scalars().all()
 
-    Used by the frontend to populate the real-time agent feed during a call.
-    """
-    warnings = [a for a in AGENTS if a["status"] == "warning"]
-    active_tasks = [
-        {
-            "agent_id": a["agent_id"],
-            "agent_name": a["name"],
-            "department": a["department"],
-            "task": activity["title"],
-            "detail": activity["detail"],
-            "state": activity["state"],
-        }
-        for a in AGENTS
-        for activity in a.get("recent_activity", [])
-        if activity["state"] == "running"
-    ]
-    total_budget = sum(a["daily_token_budget"] for a in AGENTS)
-    total_used = sum(a["tokens_used_today"] for a in AGENTS)
+    warning_agents = [a for a in agents if a.status == "warning"]
+    total_budget = sum(a.daily_token_budget for a in agents)
+    total_used = sum(a.tokens_used_today for a in agents)
+
     return {
         "agents": [
             {
-                "agent_id": a["agent_id"],
-                "name": a["name"],
-                "role": a["role"],
-                "department": a["department"],
-                "status": a["status"],
-                "current_focus": a.get("current_focus", ""),
-                "tokens_used_today": a["tokens_used_today"],
-                "daily_token_budget": a["daily_token_budget"],
-                "token_pct": round(a["tokens_used_today"] / a["daily_token_budget"] * 100),
-                "strike_count": a.get("strike_count", 0),
+                "agent_id": str(a.id),
+                "name": a.name,
+                "role": a.role,
+                "department": a.department,
+                "status": a.status,
+                "current_focus": a.current_focus or "",
+                "tokens_used_today": a.tokens_used_today,
+                "daily_token_budget": a.daily_token_budget,
+                "token_pct": round(a.tokens_used_today / a.daily_token_budget * 100) if a.daily_token_budget else 0,
+                "strike_count": a.strike_count,
             }
-            for a in AGENTS
+            for a in agents
         ],
         "warnings": [
             {
-                "agent_id": a["agent_id"],
-                "name": a["name"],
-                "department": a["department"],
-                "token_pct": round(a["tokens_used_today"] / a["daily_token_budget"] * 100),
+                "agent_id": str(a.id),
+                "name": a.name,
+                "department": a.department,
+                "token_pct": round(a.tokens_used_today / a.daily_token_budget * 100) if a.daily_token_budget else 0,
             }
-            for a in warnings
+            for a in warning_agents
         ],
-        "active_tasks": active_tasks,
+        "active_tasks": [],
         "total_token_pct": round(total_used / total_budget * 100) if total_budget else 0,
     }
 
@@ -356,15 +345,17 @@ async def create_cto_call(
     Secondary use case: escalation for an existing project when agents hit budget limits.
     Pass project_id to inject live project context and agent activity into the conversation.
     """
+    agent_result = await db.execute(select(AgentConfig))
+    all_agents = agent_result.scalars().all()
     active_tasks = [
-        f"- {a['name']} ({a['department']}): {a.get('current_focus', 'idle')}"
-        for a in AGENTS
-        if a["status"] in ("active", "warning")
+        f"- {a.name} ({a.department}): {a.current_focus or 'idle'}"
+        for a in all_agents
+        if a.status in ("active", "warning")
     ]
     warnings = [
-        f"- {a['name']}: {round(a['tokens_used_today'] / a['daily_token_budget'] * 100)}% tokens used"
-        for a in AGENTS
-        if a["status"] == "warning"
+        f"- {a.name}: {round(a.tokens_used_today / a.daily_token_budget * 100) if a.daily_token_budget else 0}% tokens used"
+        for a in all_agents
+        if a.status == "warning"
     ]
 
     project_data: dict[str, Any] | None = None

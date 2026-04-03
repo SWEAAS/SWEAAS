@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.middleware.auth_enforcement import AuthEnforcementMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.database import async_session_factory as AsyncSessionLocal
 logger = logging.getLogger(__name__)
 try:
     import sentry_sdk
@@ -81,10 +82,23 @@ async def _ensure_dev_user() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from app.core.llm_budget import budget_tracker
-    from app.services.seed_data import AGENTS
+    from app.models.agent import AgentConfig
+    from sqlalchemy import select
 
-    budget_tracker.init_budgets(AGENTS)
-    logger.info("Budget tracker ready — %d agents loaded", len(AGENTS))
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(AgentConfig))
+        db_agents = result.scalars().all()
+        agent_dicts = [
+            {
+                "agent_id": str(a.id),
+                "name": a.name,
+                "daily_token_budget": a.daily_token_budget,
+                "strike_count": a.strike_count,
+            }
+            for a in db_agents
+        ]
+    budget_tracker.init_budgets(agent_dicts)
+    logger.info("Budget tracker ready — %d agents loaded from database", len(agent_dicts))
     await _ensure_dev_user()
 
     # Start the budget-based scheduler

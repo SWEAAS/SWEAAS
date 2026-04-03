@@ -19,7 +19,7 @@ import { useBudgetStore } from "../store/budgetStore";
 import { useProjectStore } from "../store/projectStore";
 import { useTeamOnboardingStore } from "../store/teamOnboardingStore";
 import { mergeAgentsWithTeamConfig } from "../utils/teamOnboarding";
-import { observabilityApi, orchestrationApi } from "../api/client";
+import { observabilityApi } from "../api/client";
 
 interface SentryIssue {
   id: string;
@@ -30,12 +30,6 @@ interface SentryIssue {
   permalink?: string;
 }
 
-interface OrchStatus {
-  active_agents: number;
-  running_tasks: number;
-  status: string;
-}
-
 interface ObsOverview {
   total_active_agents: number;
   total_running_tasks: number;
@@ -44,24 +38,27 @@ interface ObsOverview {
 
 export default function DashboardView() {
   const { agents, fetchAgents } = useAgentStore();
-  const { consumptionPercent, fetchSummary } = useBudgetStore();
+  const { consumptionPercent, totalMonthlyBudgetUsd, fetchSummary } = useBudgetStore();
   const { currentProject, fetchProjects } = useProjectStore();
   const { config, fetchConfig } = useTeamOnboardingStore();
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[]>([]);
   const [sentryLoading, setSentryLoading] = useState(false);
-  const [orchStatus, setOrchStatus] = useState<OrchStatus | null>(null);
   const [obsOverview, setObsOverview] = useState<ObsOverview | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchAgents();
-    fetchSummary();
     fetchProjects();
     fetchConfig();
-    observabilityApi.overview()
+  }, [fetchProjects, fetchConfig]);
+
+  useEffect(() => {
+    const pid = currentProject?.id;
+    fetchAgents(pid);
+    fetchSummary(pid);
+    observabilityApi.overview(pid)
       .then((res) => setObsOverview(res.data))
       .catch(() => setObsOverview(null));
-  }, [fetchAgents, fetchSummary, fetchProjects, fetchConfig]);
+  }, [currentProject?.id, fetchAgents, fetchSummary]);
 
   useEffect(() => {
     setSentryLoading(true);
@@ -71,36 +68,22 @@ export default function DashboardView() {
       .finally(() => setSentryLoading(false));
   }, [currentProject?.id]);
 
-  useEffect(() => {
-    if (!currentProject?.id) return;
-    const poll = () => {
-      orchestrationApi.status(currentProject.id)
-        .then((res) => setOrchStatus(res.data))
-        .catch(() => setOrchStatus(null));
-    };
-    poll();
-    const interval = setInterval(poll, 10_000);
-    return () => clearInterval(interval);
-  }, [currentProject?.id]);
-
   const displayAgents = mergeAgentsWithTeamConfig(agents, config);
   const activeCount = displayAgents.filter((a) => a.status === "active").length;
   const warningCount = displayAgents.filter((a) => a.status === "warning").length;
-  const runningTasks = orchStatus?.running_tasks
-    ?? displayAgents
-      .flatMap((a) => (a as unknown as { recent_activity?: { state: string }[] }).recent_activity ?? [])
-      .filter((act) => act.state === "running").length;
   const agentPreview = displayAgents.slice(0, 8);
 
+  const totalAgents = obsOverview?.total_active_agents ?? displayAgents.length;
+  const runningTasks = obsOverview?.total_running_tasks ?? 0;
   const totalWarnings = obsOverview
     ? obsOverview.departments.reduce((sum, d) => sum + d.warnings, 0)
     : warningCount;
 
   const stats = [
-    { label: "Agents",   value: obsOverview?.total_active_agents ?? displayAgents.length, icon: Users, color: "text-[var(--brand)]" },
-    { label: "Active",   value: activeCount,           icon: Zap,           color: "text-emerald-600" },
-    { label: "Running",  value: orchStatus?.running_tasks ?? obsOverview?.total_running_tasks ?? (runningTasks || activeCount), icon: Sparkles, color: "text-[var(--brand)]" },
-    { label: "Warnings", value: totalWarnings,          icon: AlertTriangle, color: "text-amber-600" },
+    { label: "Agents",   value: totalAgents, icon: Users, color: "text-[var(--brand)]" },
+    { label: "Active",   value: activeCount,  icon: Zap,   color: "text-emerald-600" },
+    { label: "Running",  value: runningTasks, icon: Sparkles, color: "text-[var(--brand)]" },
+    { label: "Warnings", value: totalWarnings, icon: AlertTriangle, color: "text-amber-600" },
     { label: "Budget",   value: `${consumptionPercent}%`, icon: CheckCircle, color: "text-[var(--brand)]" },
   ];
 
@@ -123,8 +106,8 @@ export default function DashboardView() {
               {currentProject?.name ?? "Dashboard"}
             </h1>
             <p className="mt-0.5 text-[13px] leading-snug text-[#675f7e] max-w-lg truncate">
-              {config.completed
-                ? `${displayAgents.length} agents · $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget · ${consumptionPercent}% consumed`
+              {displayAgents.length > 0
+                ? `${displayAgents.length} agents · $${Math.round(totalMonthlyBudgetUsd || 0).toLocaleString()} budget · ${consumptionPercent}% consumed`
                 : "Your AI engineering team at a glance."}
             </p>
           </div>

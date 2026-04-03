@@ -2,10 +2,16 @@
 
 import logging
 from collections import defaultdict
+from datetime import datetime, timezone
+from uuid import UUID
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.models.agent import AgentConfig, AgentSession
+from app.models.task import Report
 from app.schemas.observability_schema import (
     DepartmentMetric,
     ObservabilityOverviewResponse,
@@ -14,7 +20,6 @@ from app.schemas.observability_schema import (
     SentryIssue,
     SentryIssueListResponse,
 )
-from app.services.seed_data import AGENTS, REPORTS
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -23,23 +28,32 @@ settings = get_settings()
 class ObservabilityService:
     """Aggregates data for operational dashboards and Sentry error querying."""
 
-    def get_overview(self) -> ObservabilityOverviewResponse:
+    async def get_overview(self, db: AsyncSession, project_id: UUID | None = None) -> ObservabilityOverviewResponse:
+        stmt = select(AgentConfig)
+        if project_id:
+            stmt = stmt.where(AgentConfig.project_id == project_id)
+        result = await db.execute(stmt)
+        agents = result.scalars().all()
+
         departments: dict[str, dict[str, int]] = defaultdict(
             lambda: {"active_agents": 0, "tokens_used_today": 0, "warnings": 0}
         )
-        running_tasks = 0
-        for agent in AGENTS:
-            dept = departments[agent["department"]]
+        for agent in agents:
+            dept = departments[agent.department]
             dept["active_agents"] += 1
-            dept["tokens_used_today"] += agent["tokens_used_today"]
-            dept["warnings"] += 1 if agent["status"] == "warning" else 0
-            running_tasks += sum(
-                1 for a in agent["recent_activity"] if a["state"] == "running"
-            )
+            dept["tokens_used_today"] += agent.tokens_used_today
+            dept["warnings"] += 1 if agent.status == "warning" else 0
+
+        running_stmt = select(AgentSession).where(AgentSession.status == "running")
+        if project_id and agents:
+            agent_ids = [a.id for a in agents]
+            running_stmt = running_stmt.where(AgentSession.agent_id.in_(agent_ids))
+        running_result = await db.execute(running_stmt)
+        running_tasks = len(running_result.scalars().all())
 
         return ObservabilityOverviewResponse(
-            report_generated_at="2026-03-31T12:30:00Z",
-            total_active_agents=len(AGENTS),
+            report_generated_at=datetime.now(timezone.utc).isoformat(),
+            total_active_agents=len(agents),
             total_running_tasks=running_tasks,
             departments=[
                 DepartmentMetric(department=dept, **metrics)
@@ -47,22 +61,30 @@ class ObservabilityService:
             ],
         )
 
-    def list_reports(self) -> ObservabilityReportListResponse:
+    async def list_reports(self, db: AsyncSession, project_id: UUID | None = None) -> ObservabilityReportListResponse:
+        stmt = select(Report).order_by(Report.created_at.desc()).limit(50)
+        if project_id:
+            stmt = stmt.where(Report.project_id == project_id)
+        result = await db.execute(stmt)
+        reports = result.scalars().all()
+
         return ObservabilityReportListResponse(
-            reports=[ObservabilityReport(**r) for r in REPORTS]
+            reports=[
+                ObservabilityReport(
+                    report_id=str(r.id),
+                    title=r.title,
+                    summary=r.summary or "",
+                    report_type=r.report_type or "daily",
+                    created_at=r.created_at.isoformat() if r.created_at else "",
+                )
+                for r in reports
+            ]
         )
 
     async def list_sentry_issues(
         self,
         project_slug: str | None = None,
     ) -> SentryIssueListResponse:
-        """Fetch unresolved Sentry issues for a project.
-
-        When *project_slug* is ``None`` (the default), falls back to the
-        global ``SENTRY_PROJECT`` setting (the SWEAAS platform project).
-        Pass a customer project's ``sentry_project_slug`` to query issues
-        for that specific project.
-        """
         if not settings.sentry_auth_token:
             return SentryIssueListResponse(issues=[])
 

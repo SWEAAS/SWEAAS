@@ -27,10 +27,6 @@ function getInitials(name: string) {
     .join("");
 }
 
-function hashSeed(value: string) {
-  return value.split("").reduce((total, char) => total + char.charCodeAt(0), 0);
-}
-
 export default function ProfileCardV3({
   agent,
   accentColor,
@@ -44,8 +40,8 @@ export default function ProfileCardV3({
     if (agent.poster_image_url) {
       return agent.poster_image_url;
     }
-    const seed = (hashSeed(agent.agent_id) % 70) + 1;
-    return `https://i.pravatar.cc/480?img=${seed}`;
+    const initials = agent.name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2) || "AG";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&size=480&background=7c5cff&color=fff&bold=true`;
   }, [agent.agent_id, agent.poster_image_url]);
 
   return (
