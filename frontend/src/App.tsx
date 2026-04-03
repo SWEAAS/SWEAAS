@@ -17,6 +17,7 @@ import SettingsView from "./views/SettingsView";
 import { lazy, Suspense } from "react";
 
 const HQView = lazy(() => import("./three/HQView"));
+const WelcomeHWView = lazy(() => import("./three/WelcomeHWView"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -68,6 +69,20 @@ export default function App() {
                   }
                 >
                   <HQView />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/welcome-hw"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center h-96 text-sweaas-text-secondary">
+                      Loading 3D Building...
+                    </div>
+                  }
+                >
+                  <WelcomeHWView />
                 </Suspense>
               }
             />

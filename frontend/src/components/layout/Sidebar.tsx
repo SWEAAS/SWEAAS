@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
+  Warehouse,
   Settings,
   Users,
   CreditCard,
@@ -17,6 +18,7 @@ import { useAuthStore } from "../../store/authStore";
 const navItems = [
   { to: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },
   { to: "/hq",         icon: Building2,       label: "Visit The Office" },
+  { to: "/welcome-hw", icon: Warehouse,       label: "Welcome to HQ" },
   { to: "/agents",     icon: Users,           label: "Agents" },
   { to: "/org-chart",  icon: GitBranch,       label: "Org Chart" },
   { to: "/budget",     icon: CreditCard,      label: "Budget" },

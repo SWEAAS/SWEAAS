@@ -17,10 +17,19 @@ type ReportContributor = Pick<
   "agent_id" | "name" | "role" | "department" | "poster_image_url" | "hierarchy_level" | "current_focus" | "status"
 >;
 
+export interface ReportSection {
+  id: string;
+  eyebrow: string;
+  title: string;
+  body?: string;
+  bullets?: string[];
+}
+
 interface CtoReportProps {
   title: string;
   subtitle: string;
   contributors: ReportContributor[];
+  sections?: ReportSection[];
 }
 
 function initials(name: string) {

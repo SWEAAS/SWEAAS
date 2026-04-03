@@ -277,6 +277,18 @@ export const stripeApi = {
   payouts: () => api.get("/stripe/payouts"),
 };
 
+// ── Orchestration API ────────────────────────────────────────────
+
+export const orchestrationApi = {
+  execute: (data: { project_id: string; task: string; feedback_items?: unknown[] }) =>
+    api.post("/orchestration/execute", data),
+  status: (projectId: string) => api.get(`/orchestration/status/${projectId}`),
+  sessions: (projectId: string) => api.get(`/orchestration/sessions/${projectId}`),
+  reports: (projectId: string) => api.get(`/orchestration/reports/${projectId}`),
+  reportPdf: (projectId: string, reportId: string) =>
+    api.get(`/orchestration/reports/${projectId}/${reportId}/pdf`),
+};
+
 // ── Feedback API ────────────────────────────────────────────────
 
 export const feedbackApi = {

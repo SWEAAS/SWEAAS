@@ -5,10 +5,8 @@ import {
   CheckCheck,
   CreditCard,
   FileText,
-  Filter,
   MessageSquare,
   Shield,
-  Sparkles,
   Users,
   Zap,
 } from "lucide-react";
@@ -41,11 +39,11 @@ const typeLabels: Record<string, string> = {
   system: "System",
 };
 
-const priorityColors: Record<string, { bg: string; text: string; border: string }> = {
-  low: { bg: "#f0fdf4", text: "#16a34a", border: "#bbf7d0" },
-  medium: { bg: "#eff6ff", text: "#2563eb", border: "#bfdbfe" },
-  high: { bg: "#fef3c7", text: "#d97706", border: "#fde68a" },
-  critical: { bg: "#fef2f2", text: "#dc2626", border: "#fecaca" },
+const priorityDot: Record<string, string> = {
+  low: "#16a34a",
+  medium: "#2563eb",
+  high: "#d97706",
+  critical: "#dc2626",
 };
 
 function timeAgo(dateStr: string): string {
@@ -60,73 +58,111 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function NotificationCard({ item }: { item: NotificationItem }) {
+function NotificationRow({ item }: { item: NotificationItem }) {
   const markAsRead = useNotificationStore((s) => s.markAsRead);
-  const colors = priorityColors[item.priority] || priorityColors.medium;
+  const dotColor = priorityDot[item.priority] || priorityDot.medium;
   const Icon = typeIcons[item.type] || Bell;
+  const isUnread = !item.read_at;
 
   return (
     <div
       style={{
         display: "flex",
-        gap: 16,
-        padding: "16px 20px",
-        background: item.read_at ? "#fff" : colors.bg,
-        border: `1px solid ${item.read_at ? "#ece7f5" : colors.border}`,
-        borderRadius: 16,
-        opacity: item.read_at ? 0.75 : 1,
-        transition: "all 0.15s ease",
+        alignItems: "flex-start",
+        gap: 12,
+        padding: "12px 16px",
+        borderBottom: "1px solid #ece7f5",
+        background: isUnread ? "#faf8ff" : "transparent",
+        transition: "background 0.1s ease",
+        position: "relative",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "#f5f3fa";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = isUnread ? "#faf8ff" : "transparent";
       }}
     >
+      {isUnread && (
+        <div
+          style={{
+            position: "absolute",
+            left: 4,
+            top: 20,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: dotColor,
+          }}
+        />
+      )}
+
       <div
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 12,
-          background: item.read_at ? "#f8f6fc" : "#fff",
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          background: "#f5f3fa",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
-          border: `1px solid ${item.read_at ? "#ece7f5" : colors.border}`,
         }}
       >
-        <Icon size={16} style={{ color: item.read_at ? "#7a7390" : colors.text }} />
+        <Icon size={14} style={{ color: "#7a7390" }} />
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
           <span
             style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: colors.text,
-              background: colors.bg,
-              border: `1px solid ${colors.border}`,
-              padding: "1px 8px",
-              borderRadius: 20,
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
+              fontSize: 13,
+              fontWeight: isUnread ? 600 : 500,
+              color: "#1f1638",
+              lineHeight: 1.3,
             }}
           >
-            {item.priority}
+            {item.title}
           </span>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "#9a94ac", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "#9a94ac",
+              flexShrink: 0,
+            }}
+          >
             {typeLabels[item.type] || item.type}
           </span>
-          <span style={{ fontSize: 11, color: "#9a94ac", marginLeft: "auto" }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: "#b3adc4",
+              marginLeft: "auto",
+              flexShrink: 0,
+            }}
+          >
             {timeAgo(item.created_at)}
           </span>
         </div>
 
-        <p style={{ fontSize: 14, fontWeight: item.read_at ? 500 : 600, color: "#1f1638", margin: "0 0 4px" }}>
-          {item.title}
-        </p>
-        <p style={{ fontSize: 13, color: "#675f7e", margin: 0, lineHeight: 1.5 }}>
+        <p
+          style={{
+            fontSize: 13,
+            color: "#675f7e",
+            margin: "2px 0 0",
+            lineHeight: 1.45,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
           {item.body}
         </p>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
           {item.link_url && (
             <a
               href={item.link_url}
@@ -140,20 +176,20 @@ function NotificationCard({ item }: { item: NotificationItem }) {
               View details
             </a>
           )}
-          {!item.read_at && (
+          {isUnread && (
             <button
               onClick={() => markAsRead([item.id])}
               style={{
                 fontSize: 12,
                 fontWeight: 500,
-                color: "#7a7390",
+                color: "#9a94ac",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                marginLeft: item.link_url ? 12 : 0,
+                padding: 0,
               }}
             >
-              Mark as read
+              Mark read
             </button>
           )}
         </div>
@@ -178,52 +214,47 @@ export default function NotificationsView() {
     fetchNotifications(currentProject?.id, filter === "unread");
   }, [fetchNotifications, currentProject?.id, filter]);
 
-  return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] p-7 shadow-[0_24px_70px_-50px_rgba(42,26,92,0.3)]">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-white/75 px-3 py-1 text-xs font-medium text-[var(--brand)] backdrop-blur">
-          <Sparkles size={12} />
-          Communications
-        </div>
-        <h2 className="text-2xl font-semibold tracking-tight text-[#1f1638]">Notifications</h2>
-        <p className="mt-1 text-sm text-[#675f7e]">
-          Stay informed about reports, budget alerts, agent activity, and more.
-        </p>
-      </section>
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: "6px 0",
+    fontSize: 13,
+    fontWeight: active ? 600 : 500,
+    color: active ? "#1f1638" : "#9a94ac",
+    background: "none",
+    border: "none",
+    borderBottom: active ? "2px solid var(--brand)" : "2px solid transparent",
+    cursor: "pointer",
+    marginRight: 20,
+    transition: "color 0.1s ease",
+  });
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setFilter("all")}
+  return (
+    <div className="mx-auto max-w-3xl">
+      {/* Compact utility header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 0 16px",
+        }}
+      >
+        <div>
+          <h2
             style={{
-              padding: "6px 16px",
-              fontSize: 13,
-              fontWeight: filter === "all" ? 600 : 500,
-              color: filter === "all" ? "var(--brand)" : "#7a7390",
-              background: filter === "all" ? "var(--brand-chip)" : "transparent",
-              border: `1px solid ${filter === "all" ? "var(--brand-border)" : "#ece7f5"}`,
-              borderRadius: 10,
-              cursor: "pointer",
+              fontSize: 18,
+              fontWeight: 700,
+              color: "#1f1638",
+              margin: 0,
+              lineHeight: 1.3,
             }}
           >
-            All ({totalCount})
-          </button>
-          <button
-            onClick={() => setFilter("unread")}
-            style={{
-              padding: "6px 16px",
-              fontSize: 13,
-              fontWeight: filter === "unread" ? 600 : 500,
-              color: filter === "unread" ? "var(--brand)" : "#7a7390",
-              background: filter === "unread" ? "var(--brand-chip)" : "transparent",
-              border: `1px solid ${filter === "unread" ? "var(--brand-border)" : "#ece7f5"}`,
-              borderRadius: 10,
-              cursor: "pointer",
-            }}
-          >
-            <Filter size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-            Unread ({unreadCount})
-          </button>
+            Notifications
+          </h2>
+          <p style={{ fontSize: 13, color: "#9a94ac", margin: "2px 0 0" }}>
+            {unreadCount > 0
+              ? `${unreadCount} unread`
+              : "All caught up"}
+          </p>
         </div>
 
         {unreadCount > 0 && (
@@ -233,38 +264,63 @@ export default function NotificationsView() {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              padding: "6px 14px",
+              padding: "6px 12px",
               fontSize: 12,
               fontWeight: 500,
               color: "var(--brand)",
-              background: "var(--brand-chip)",
-              border: "none",
-              borderRadius: 8,
+              background: "none",
+              border: "1px solid #ece7f5",
+              borderRadius: 6,
               cursor: "pointer",
             }}
           >
-            <CheckCheck size={14} /> Mark all as read
+            <CheckCheck size={14} /> Mark all read
           </button>
         )}
       </div>
 
-      <div className="space-y-3">
+      {/* Tab-style filter bar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          borderBottom: "1px solid #ece7f5",
+          marginBottom: 0,
+        }}
+      >
+        <button onClick={() => setFilter("all")} style={tabStyle(filter === "all")}>
+          All{totalCount > 0 ? ` (${totalCount})` : ""}
+        </button>
+        <button onClick={() => setFilter("unread")} style={tabStyle(filter === "unread")}>
+          Unread{unreadCount > 0 ? ` (${unreadCount})` : ""}
+        </button>
+      </div>
+
+      {/* Notification list */}
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #ece7f5",
+          borderTop: "none",
+          borderRadius: "0 0 8px 8px",
+        }}
+      >
         {loading ? (
           <div style={{ padding: "40px 20px", textAlign: "center" }}>
-            <p style={{ fontSize: 14, color: "#7a7390" }}>Loading notifications…</p>
+            <p style={{ fontSize: 13, color: "#9a94ac", margin: 0 }}>Loading…</p>
           </div>
         ) : notifications.length === 0 ? (
-          <div style={{ padding: "60px 20px", textAlign: "center" }}>
-            <Bell size={40} style={{ color: "#d1cce0", margin: "0 auto 16px" }} />
-            <p style={{ fontSize: 16, fontWeight: 500, color: "#7a7390", margin: 0 }}>
+          <div style={{ padding: "48px 20px", textAlign: "center" }}>
+            <Bell size={28} style={{ color: "#d1cce0", marginBottom: 10 }} />
+            <p style={{ fontSize: 14, fontWeight: 500, color: "#7a7390", margin: 0 }}>
               {filter === "unread" ? "No unread notifications" : "No notifications yet"}
             </p>
-            <p style={{ fontSize: 13, color: "#9a94ac", margin: "6px 0 0" }}>
-              You'll receive alerts for reports, budget thresholds, feedback, and more.
+            <p style={{ fontSize: 13, color: "#b3adc4", margin: "4px 0 0" }}>
+              Alerts for reports, budgets, and agent activity will appear here.
             </p>
           </div>
         ) : (
-          notifications.map((item) => <NotificationCard key={item.id} item={item} />)
+          notifications.map((item) => <NotificationRow key={item.id} item={item} />)
         )}
       </div>
     </div>

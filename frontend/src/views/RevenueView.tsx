@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -13,14 +13,9 @@ import {
   BadgeCheck,
   Banknote,
   CheckCircle,
-  CircleDollarSign,
-  Clock,
   ExternalLink,
   Loader2,
-  Receipt,
   ShieldAlert,
-  TrendingUp,
-  Wallet,
 } from "lucide-react";
 import { useStripeStore } from "../store/stripeStore";
 import { useProjectStore } from "../store/projectStore";
@@ -34,20 +29,22 @@ function centsToUsd(cents: number): string {
 
 function statusBadge(status: string) {
   const map: Record<string, { label: string; cls: string }> = {
-    succeeded: { label: "Succeeded", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    paid: { label: "Paid", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    pending: { label: "Pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
-    failed: { label: "Failed", cls: "text-red-700 bg-red-50 border-red-200" },
-    canceled: { label: "Canceled", cls: "text-gray-600 bg-gray-50 border-gray-200" },
-    refunded: { label: "Refunded", cls: "text-blue-700 bg-blue-50 border-blue-200" },
+    succeeded: { label: "Succeeded", cls: "text-emerald-700 bg-emerald-50" },
+    paid: { label: "Paid", cls: "text-emerald-700 bg-emerald-50" },
+    pending: { label: "Pending", cls: "text-amber-700 bg-amber-50" },
+    failed: { label: "Failed", cls: "text-red-700 bg-red-50" },
+    canceled: { label: "Canceled", cls: "text-gray-500 bg-gray-100" },
+    refunded: { label: "Refunded", cls: "text-blue-700 bg-blue-50" },
   };
-  const s = map[status] ?? { label: status, cls: "text-gray-600 bg-gray-50 border-gray-200" };
+  const s = map[status] ?? { label: status, cls: "text-gray-500 bg-gray-100" };
   return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.cls}`}>
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${s.cls}`}>
       {s.label}
     </span>
   );
 }
+
+type Tab = "payments" | "payouts";
 
 export default function RevenueView() {
   const {
@@ -63,6 +60,7 @@ export default function RevenueView() {
     refreshAccountLink,
   } = useStripeStore();
   const { currentProject } = useProjectStore();
+  const [activeTab, setActiveTab] = useState<Tab>("payments");
 
   useEffect(() => {
     fetchAll(currentProject?.id);
@@ -85,147 +83,133 @@ export default function RevenueView() {
   const onboarded = connectStatus.onboarding_complete && connectStatus.charges_enabled;
 
   return (
-    <div className="space-y-6">
-      {/* ── Connect status banner ──────────────────────────────── */}
-      <section
-        className={`overflow-hidden rounded-[28px] border p-6 shadow-[0_24px_70px_-50px_rgba(42,26,92,0.45)] ${
-          onboarded
-            ? "border-emerald-200 bg-[linear-gradient(135deg,#064e3b_0%,#059669_55%,#34d399_100%)] text-white"
-            : "border-[#e7e0f6] bg-[linear-gradient(135deg,#1f1638_0%,#3e2c72_55%,#7c5cff_100%)] text-white"
-        }`}
-      >
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/88 backdrop-blur">
-              {onboarded ? <BadgeCheck size={12} /> : <ShieldAlert size={12} />}
-              {onboarded ? "Stripe Connected" : "Stripe Setup Required"}
+    <div className="space-y-4">
+      {/* ── Page header ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-widest text-[var(--color-sweaas-text-tertiary)]">
+            Billing
+          </p>
+          <h1 className="text-lg font-semibold text-[var(--color-sweaas-text)]">Revenue</h1>
+        </div>
+      </div>
+
+      {/* ── Connect status ───────────────────────────────────────── */}
+      {!onboarded && (
+        <section className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert size={15} className="shrink-0 text-amber-600" />
+            <div>
+              <p className="text-[13px] font-medium text-amber-900">Stripe setup required</p>
+              <p className="text-[12px] leading-snug text-amber-700/80">
+                Complete onboarding so payments can flow to your account.
+              </p>
             </div>
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {onboarded
-                ? "Your Stripe account is connected"
-                : "Connect your Stripe account to receive payouts"}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
-              {onboarded
-                ? `Payments are flowing to your connected account (${connectStatus.stripe_account_id}). Payouts are ${connectStatus.payouts_enabled ? "enabled" : "pending activation"}.`
-                : "Complete Stripe onboarding so we can route payments to your account and you can start receiving revenue from your projects."}
-            </p>
           </div>
-          {!onboarded && (
-            <button
-              type="button"
-              onClick={handleOnboard}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/20 bg-white px-5 py-3 text-[14px] font-semibold text-[#1f1638] transition-transform hover:-translate-y-0.5 disabled:opacity-50"
-            >
-              {loading ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <ExternalLink size={15} />
-              )}
-              {connectStatus.stripe_account_id ? "Resume Setup" : "Start Setup"}
-            </button>
-          )}
-        </div>
+          <button
+            type="button"
+            onClick={handleOnboard}
+            disabled={loading}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-amber-900 shadow-xs transition-colors hover:bg-amber-50 disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+            {connectStatus.stripe_account_id ? "Resume Setup" : "Start Setup"}
+          </button>
+        </section>
+      )}
+
+      {onboarded && (
+        <section className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-2.5">
+          <BadgeCheck size={14} className="shrink-0 text-emerald-600" />
+          <p className="text-[12px] text-emerald-800">
+            Stripe connected
+            <span className="ml-1 text-emerald-600/70">
+              ({connectStatus.stripe_account_id})
+            </span>
+            {connectStatus.payouts_enabled
+              ? " — payouts enabled"
+              : " — payouts pending activation"}
+          </p>
+        </section>
+      )}
+
+      {/* ── KPI stat row ─────────────────────────────────────────── */}
+      <section className="flex flex-wrap items-stretch gap-3">
+        {[
+          { label: "Available", value: centsToUsd(balance.available_cents), accent: "text-emerald-600" },
+          { label: "Pending", value: centsToUsd(balance.pending_cents), accent: "text-amber-600" },
+          { label: "Total Revenue", value: centsToUsd(revenue.total_revenue_cents), accent: "text-[var(--brand)]" },
+          { label: "Fees", value: centsToUsd(revenue.total_fees_cents), accent: "text-red-500" },
+          { label: "Net Earnings", value: centsToUsd(revenue.net_earnings_cents), accent: "text-emerald-600" },
+        ].map(({ label, value, accent }) => (
+          <div
+            key={label}
+            className="flex min-w-[140px] flex-1 flex-col rounded-xl border border-[var(--color-sweaas-border)] bg-white px-4 py-3"
+          >
+            <span className="text-[10px] font-medium uppercase tracking-widest text-[var(--color-sweaas-text-tertiary)]">
+              {label}
+            </span>
+            <span className={`mt-0.5 text-lg font-semibold ${accent}`}>{value}</span>
+          </div>
+        ))}
       </section>
 
-      {/* ── Balance + Revenue stats ────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] p-6 shadow-[0_30px_80px_-50px_rgba(42,26,92,0.3)]">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          {[
-            {
-              label: "Available Balance",
-              value: centsToUsd(balance.available_cents),
-              icon: Wallet,
-              color: "text-emerald-600",
-              bg: "bg-emerald-50",
-            },
-            {
-              label: "Pending Balance",
-              value: centsToUsd(balance.pending_cents),
-              icon: Clock,
-              color: "text-amber-600",
-              bg: "bg-amber-50",
-            },
-            {
-              label: "Total Revenue",
-              value: centsToUsd(revenue.total_revenue_cents),
-              icon: TrendingUp,
-              color: "text-[var(--brand)]",
-              bg: "bg-[var(--brand-surface)]",
-            },
-            {
-              label: "Platform Fees",
-              value: centsToUsd(revenue.total_fees_cents),
-              icon: Receipt,
-              color: "text-red-500",
-              bg: "bg-red-50",
-            },
-            {
-              label: "Net Earnings",
-              value: centsToUsd(revenue.net_earnings_cents),
-              icon: CircleDollarSign,
-              color: "text-emerald-600",
-              bg: "bg-emerald-50",
-            },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
-            <div
-              key={label}
-              className="rounded-[18px] border border-white/70 bg-white/80 px-5 py-4 backdrop-blur"
-            >
-              <div className={`mb-2 inline-flex rounded-[8px] p-1.5 ${bg}`}>
-                <Icon size={14} className={color} />
-              </div>
-              <p className="text-xl font-semibold text-[#1f1638]">{value}</p>
-              <p className="text-[10px] uppercase tracking-[0.15em] text-[#7a7390]">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Revenue chart ──────────────────────────────────────── */}
+      {/* ── Revenue chart ────────────────────────────────────────── */}
       {chartData.length > 0 && (
-        <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-          <div className="mb-4 flex items-center gap-2">
-            <TrendingUp size={16} className="text-[#675f7e]" />
-            <h3 className="text-[15px] font-semibold text-[#1f1638]">Monthly Revenue</h3>
+        <section className="rounded-xl border border-[var(--color-sweaas-border)] bg-white">
+          <div className="border-b border-[var(--color-sweaas-border)] px-4 py-2.5">
+            <h2 className="text-[13px] font-semibold text-[var(--color-sweaas-text)]">
+              Monthly Revenue
+            </h2>
           </div>
-          <div className="h-72 rounded-[22px] border border-[#ece7f5] bg-white p-4">
+          <div className="h-64 px-4 py-3">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#7c5cff" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#7c5cff" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--brand)" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="var(--brand)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="netGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#34d399" stopOpacity={0.3} />
+                    <stop offset="5%" stopColor="#34d399" stopOpacity={0.15} />
                     <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ece7f5" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#7a7390" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#7a7390" }} tickFormatter={(v) => `$${v}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ece7f5" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 11, fill: "#7a7390" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#7a7390" }}
+                  tickFormatter={(v) => `$${v}`}
+                  axisLine={false}
+                  tickLine={false}
+                  width={48}
+                />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: 12,
+                    borderRadius: 8,
                     border: "1px solid #ece7f5",
                     fontSize: 12,
+                    boxShadow: "0 2px 8px rgba(31,22,56,0.08)",
                   }}
                   formatter={(value: number) => [`$${value.toFixed(2)}`, undefined]}
                 />
                 <Area
                   type="monotone"
                   dataKey="Revenue"
-                  stroke="#7c5cff"
-                  strokeWidth={2}
+                  stroke="var(--brand)"
+                  strokeWidth={1.5}
                   fill="url(#revGrad)"
                 />
                 <Area
                   type="monotone"
                   dataKey="Net Earnings"
                   stroke="#34d399"
-                  strokeWidth={2}
+                  strokeWidth={1.5}
                   fill="url(#netGrad)"
                 />
               </AreaChart>
@@ -234,97 +218,111 @@ export default function RevenueView() {
         </section>
       )}
 
-      {/* ── Recent payments ────────────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-        <div className="mb-4 flex items-center gap-2">
-          <Banknote size={16} className="text-[#675f7e]" />
-          <h3 className="text-[15px] font-semibold text-[#1f1638]">Recent Payments</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">
-            {revenue.payment_count} total
-          </span>
+      {/* ── Payments / Payouts tabbed panel ───────────────────────── */}
+      <section className="rounded-xl border border-[var(--color-sweaas-border)] bg-white">
+        <div className="flex items-center gap-1 border-b border-[var(--color-sweaas-border)] px-4">
+          {([
+            { key: "payments" as Tab, label: "Payments", count: revenue.payment_count, icon: Banknote },
+            { key: "payouts" as Tab, label: "Payouts", count: payouts.length, icon: ArrowUpRight },
+          ]).map(({ key, label, count, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                activeTab === key
+                  ? "text-[var(--color-sweaas-text)]"
+                  : "text-[var(--color-sweaas-text-tertiary)] hover:text-[var(--color-sweaas-text-secondary)]"
+              }`}
+            >
+              <Icon size={13} />
+              {label}
+              <span className="rounded bg-[var(--color-sweaas-surface)] px-1.5 py-px text-[10px] font-semibold text-[var(--color-sweaas-text-secondary)]">
+                {count}
+              </span>
+              {activeTab === key && (
+                <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-[var(--brand)]" />
+              )}
+            </button>
+          ))}
         </div>
-        <div className="overflow-hidden rounded-[22px] border border-[#ece7f5] bg-white">
-          {payments.length === 0 ? (
-            <div className="flex items-center gap-3 p-6 text-[13px] text-[#7a7390]">
-              <CheckCircle size={15} className="text-emerald-500" />
+
+        {/* Payments tab */}
+        {activeTab === "payments" && (
+          payments.length === 0 ? (
+            <div className="flex items-center gap-2 px-5 py-8 text-[13px] text-[var(--color-sweaas-text-tertiary)]">
+              <CheckCircle size={14} className="text-emerald-500" />
               No payments yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead>
-                  <tr className="border-b border-[#ece7f5] text-[10px] uppercase tracking-wider text-[#7a7390]">
-                    <th className="px-5 py-3 font-semibold">Date</th>
-                    <th className="px-5 py-3 font-semibold">Amount</th>
-                    <th className="px-5 py-3 font-semibold">Fee</th>
-                    <th className="px-5 py-3 font-semibold">Net</th>
-                    <th className="px-5 py-3 font-semibold">Status</th>
-                    <th className="px-5 py-3 font-semibold">Customer</th>
+                  <tr className="border-b border-[var(--color-sweaas-border)] text-[10px] uppercase tracking-wider text-[var(--color-sweaas-text-tertiary)]">
+                    <th className="px-4 py-2 font-semibold">Date</th>
+                    <th className="px-4 py-2 font-semibold">Amount</th>
+                    <th className="px-4 py-2 font-semibold">Fee</th>
+                    <th className="px-4 py-2 font-semibold">Net</th>
+                    <th className="px-4 py-2 font-semibold">Status</th>
+                    <th className="px-4 py-2 font-semibold">Customer</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ece7f5]">
+                <tbody className="divide-y divide-[var(--color-sweaas-border)]">
                   {payments.slice(0, 20).map((p) => (
-                    <tr key={p.id} className="hover:bg-[#f8f6fc]/60 transition-colors">
-                      <td className="whitespace-nowrap px-5 py-3 text-[#1f1638]">
+                    <tr key={p.id} className="transition-colors hover:bg-[var(--color-sweaas-bg)]">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-[var(--color-sweaas-text)]">
                         {p.created_at ? new Date(p.created_at).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-5 py-3 font-medium text-[#1f1638]">
+                      <td className="px-4 py-2.5 font-medium text-[var(--color-sweaas-text)]">
                         {centsToUsd(p.amount_cents)}
                       </td>
-                      <td className="px-5 py-3 text-red-500">
+                      <td className="px-4 py-2.5 text-red-500">
                         -{centsToUsd(p.platform_fee_cents)}
                       </td>
-                      <td className="px-5 py-3 font-medium text-emerald-600">
+                      <td className="px-4 py-2.5 font-medium text-emerald-600">
                         {centsToUsd(p.net_amount_cents)}
                       </td>
-                      <td className="px-5 py-3">{statusBadge(p.status)}</td>
-                      <td className="px-5 py-3 text-[#7a7390]">{p.end_user_email ?? "—"}</td>
+                      <td className="px-4 py-2.5">{statusBadge(p.status)}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-sweaas-text-tertiary)]">
+                        {p.end_user_email ?? "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      </section>
+          )
+        )}
 
-      {/* ── Payout history ─────────────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-        <div className="mb-4 flex items-center gap-2">
-          <ArrowUpRight size={16} className="text-[#675f7e]" />
-          <h3 className="text-[15px] font-semibold text-[#1f1638]">Payout History</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">
-            {payouts.length} payouts
-          </span>
-        </div>
-        <div className="overflow-hidden rounded-[22px] border border-[#ece7f5] bg-white">
-          {payouts.length === 0 ? (
-            <div className="flex items-center gap-3 p-6 text-[13px] text-[#7a7390]">
-              <CheckCircle size={15} className="text-emerald-500" />
+        {/* Payouts tab */}
+        {activeTab === "payouts" && (
+          payouts.length === 0 ? (
+            <div className="flex items-center gap-2 px-5 py-8 text-[13px] text-[var(--color-sweaas-text-tertiary)]">
+              <CheckCircle size={14} className="text-emerald-500" />
               No payouts yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead>
-                  <tr className="border-b border-[#ece7f5] text-[10px] uppercase tracking-wider text-[#7a7390]">
-                    <th className="px-5 py-3 font-semibold">Date</th>
-                    <th className="px-5 py-3 font-semibold">Amount</th>
-                    <th className="px-5 py-3 font-semibold">Status</th>
-                    <th className="px-5 py-3 font-semibold">Arrival</th>
+                  <tr className="border-b border-[var(--color-sweaas-border)] text-[10px] uppercase tracking-wider text-[var(--color-sweaas-text-tertiary)]">
+                    <th className="px-4 py-2 font-semibold">Date</th>
+                    <th className="px-4 py-2 font-semibold">Amount</th>
+                    <th className="px-4 py-2 font-semibold">Status</th>
+                    <th className="px-4 py-2 font-semibold">Arrival</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#ece7f5]">
+                <tbody className="divide-y divide-[var(--color-sweaas-border)]">
                   {payouts.map((po) => (
-                    <tr key={po.id} className="hover:bg-[#f8f6fc]/60 transition-colors">
-                      <td className="whitespace-nowrap px-5 py-3 text-[#1f1638]">
+                    <tr key={po.id} className="transition-colors hover:bg-[var(--color-sweaas-bg)]">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-[var(--color-sweaas-text)]">
                         {po.created_at ? new Date(po.created_at).toLocaleDateString() : "—"}
                       </td>
-                      <td className="px-5 py-3 font-medium text-[#1f1638]">
+                      <td className="px-4 py-2.5 font-medium text-[var(--color-sweaas-text)]">
                         {centsToUsd(po.amount_cents)}
                       </td>
-                      <td className="px-5 py-3">{statusBadge(po.status)}</td>
-                      <td className="px-5 py-3 text-[#7a7390]">
+                      <td className="px-4 py-2.5">{statusBadge(po.status)}</td>
+                      <td className="px-4 py-2.5 text-[var(--color-sweaas-text-tertiary)]">
                         {po.arrival_date
                           ? new Date(po.arrival_date).toLocaleDateString()
                           : "—"}
@@ -334,8 +332,8 @@ export default function RevenueView() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          )
+        )}
       </section>
     </div>
   );

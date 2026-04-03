@@ -20,69 +20,47 @@ export default function AgentCard({ agent, onClick }: AgentCardProps) {
   return (
     <div
       onClick={onClick}
-      className="rounded-[22px] border border-[#ece7f5] bg-white p-5 shadow-[0_12px_32px_-24px_rgba(42,26,92,0.28)] transition-all duration-200"
+      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#faf8fd]"
       style={{ cursor: onClick ? "pointer" : "default" }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget as HTMLDivElement;
-        el.style.boxShadow = "0_20px_44px_-28px_rgba(42,26,92,0.38)";
-        el.style.borderColor = "var(--brand-border)";
-        if (onClick) el.style.transform = "translateY(-1px)";
-      }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget as HTMLDivElement;
-        el.style.boxShadow = "";
-        el.style.borderColor = "#ece7f5";
-        el.style.transform = "translateY(0)";
-      }}
     >
-      {/* Top row */}
-      <div className="mb-3.5 flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-bold text-[#1f1638] m-0 tracking-[-0.01em]">
+      {/* Name + department */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-[13px] font-semibold text-[#1f1638] truncate">
             {agent.name}
           </p>
-          <div className="flex items-center gap-1.5 mt-1">
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize"
-              style={{ color: accent, background: `color-mix(in srgb, ${accent} 10%, white)` }}
-            >
-              {agent.department}
-            </span>
-            <span className="text-[11px] text-[#7a7390]">
-              {agent.role.replace(/_/g, " ")}
-            </span>
-          </div>
+          <span
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium capitalize"
+            style={{ color: accent, background: `color-mix(in srgb, ${accent} 8%, white)` }}
+          >
+            {agent.department}
+          </span>
         </div>
-
-        <AgentStatusBadge status={agent.status} className="ml-2.5 shrink-0" />
+        <p className="text-[11px] text-[#7a7390] mt-0.5 truncate">
+          {agent.role.replace(/_/g, " ")}
+        </p>
       </div>
 
-      {/* Token usage */}
-      <div>
-        <div className="flex justify-between mb-1.5">
-          <span className="text-[11px] text-[#7a7390] font-medium">Token usage</span>
-          <span className={`text-[11px] font-bold ${pct >= 85 ? "text-red-600" : "text-[#1f1638]"}`}>
+      {/* Token usage — compact inline bar */}
+      <div className="shrink-0 w-28">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[10px] text-[#7a7390]">{(agent.tokens_used_today / 1000).toFixed(0)}K / {(agent.daily_token_budget / 1000).toFixed(0)}K</span>
+          <span className={`text-[10px] font-semibold ${pct >= 85 ? "text-red-600" : "text-[#1f1638]"}`}>
             {pct}%
           </span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#ece7f5]">
+        <div className="h-1 overflow-hidden rounded-full bg-[#ece7f5]">
           <div
-            className="h-full rounded-full transition-[width] duration-500"
+            className="h-full rounded-full"
             style={{
               width: `${Math.min(pct, 100)}%`,
-              background: pct >= 85
-                ? "linear-gradient(90deg,#EF4444,#DC2626)"
-                : pct >= 60
-                ? "linear-gradient(90deg,#F59E0B,#D97706)"
-                : "linear-gradient(90deg,var(--brand),var(--brand-dark))",
+              background: pct >= 85 ? "#EF4444" : pct >= 60 ? "#F59E0B" : "var(--brand)",
             }}
           />
         </div>
-        <div className="flex justify-between mt-1.5">
-          <span className="text-[10px] text-[#7a7390]">{(agent.tokens_used_today / 1000).toFixed(0)}K used</span>
-          <span className="text-[10px] text-[#7a7390]">{(agent.daily_token_budget / 1000).toFixed(0)}K limit</span>
-        </div>
       </div>
+
+      <AgentStatusBadge status={agent.status} size="compact" className="shrink-0" />
     </div>
   );
 }

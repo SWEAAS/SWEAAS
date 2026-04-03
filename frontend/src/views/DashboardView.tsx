@@ -60,14 +60,14 @@ export default function DashboardView() {
   const runningTasks = displayAgents
     .flatMap((a) => (a as unknown as { recent_activity?: { state: string }[] }).recent_activity ?? [])
     .filter((act) => act.state === "running").length;
-  const agentPreview = displayAgents.slice(0, 9);
+  const agentPreview = displayAgents.slice(0, 8);
 
   const stats = [
-    { label: "Total Agents",  value: displayAgents.length,   icon: Users,          color: "text-[var(--brand)]",  bg: "bg-[var(--brand-surface)]" },
-    { label: "Active",        value: activeCount,     icon: Zap,            color: "text-emerald-600",      bg: "bg-emerald-50" },
-    { label: "Running Tasks", value: runningTasks || activeCount, icon: Sparkles, color: "text-[var(--brand)]", bg: "bg-[var(--brand-chip)]" },
-    { label: "Warnings",      value: warningCount,    icon: AlertTriangle,  color: "text-amber-600",        bg: "bg-amber-50" },
-    { label: "Budget Used",   value: `${consumptionPercent}%`, icon: CheckCircle, color: "text-[var(--brand)]", bg: "bg-[var(--brand-surface)]" },
+    { label: "Agents",   value: displayAgents.length, icon: Users,         color: "text-[var(--brand)]" },
+    { label: "Active",   value: activeCount,           icon: Zap,           color: "text-emerald-600" },
+    { label: "Running",  value: runningTasks || activeCount, icon: Sparkles, color: "text-[var(--brand)]" },
+    { label: "Warnings", value: warningCount,          icon: AlertTriangle, color: "text-amber-600" },
+    { label: "Budget",   value: `${consumptionPercent}%`, icon: CheckCircle, color: "text-[var(--brand)]" },
   ];
 
   const levelColor: Record<string, string> = {
@@ -77,141 +77,131 @@ export default function DashboardView() {
   };
 
   return (
-    <div className="space-y-6">
-      <section className="overflow-hidden rounded-[28px] border border-[#e7e0f6] bg-[linear-gradient(180deg,#ffffff_0%,#faf8fe_100%)] p-6 shadow-[0_24px_70px_-54px_rgba(42,26,92,0.22)]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-[var(--brand-surface)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--brand)]">
-              <Sparkles size={12} />
-              {config.completed ? "Team configured" : "Onboarding"}
-            </div>
-            <h2 className="text-2xl font-semibold tracking-tight text-[#1f1638]">
-              {config.completed ? "Your team is onboarded" : "Onboard your team"}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#675f7e]">
+    <div className="space-y-4">
+      {/* ── Utility header ───────────────────────────────────── */}
+      <header className="rounded-xl border border-[#ece7f5] bg-white px-5 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#7a7390]">
+              {currentProject ? "Project" : "Workspace"}
+            </p>
+            <h1 className="text-lg font-semibold text-[#1f1638] truncate">
+              {currentProject?.name ?? "Dashboard"}
+            </h1>
+            <p className="mt-0.5 text-[13px] leading-snug text-[#675f7e] max-w-lg truncate">
               {config.completed
-                ? `${config.company_size || "Your"} employees, $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget, and ${displayAgents.length} configured AI teammates are now driving the org chart and Cto surfaces.`
-                : "Answer a few questions, assign your Tavus personas once, and we’ll populate the org chart, Cto face, and employee roster across the product."}
+                ? `${displayAgents.length} agents · $${Math.round(config.overall_budget_usd || 0).toLocaleString()} budget`
+                : "Your AI engineering team at a glance."}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/onboarding")}
-            className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-[var(--brand-border)] bg-white px-5 py-3 text-[14px] font-semibold text-[#1f1638] transition-transform hover:-translate-y-0.5 hover:bg-[var(--brand-surface)]"
-          >
-            {config.completed ? "Edit onboarding" : "Onboard your team"}
-            <ArrowRight size={15} />
-          </button>
-        </div>
-      </section>
-
-      {/* ── Hero header ─────────────────────────────────────────── */}
-      <section className="overflow-hidden rounded-[32px] border border-[#e7e0f6] bg-[radial-gradient(circle_at_top_left,var(--brand-surface)_0%,transparent_40%),linear-gradient(180deg,#fcfbff_0%,#f7f5fb_100%)] p-8 shadow-[0_30px_80px_-50px_rgba(42,26,92,0.3)]">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--brand-border)] bg-white/75 px-3 py-1 text-xs font-medium text-[var(--brand)] backdrop-blur">
-              <Sparkles size={12} />
-              {currentProject ? "Project overview" : "Workspace overview"}
-            </div>
-            <h2 className="text-3xl font-semibold tracking-tight text-[#1f1638]">
-              {currentProject?.name ?? "Dashboard"}
-            </h2>
-            <p className="mt-2 max-w-lg text-sm leading-relaxed text-[#675f7e]">
-              {currentProject?.description ?? "Your AI engineering team at a glance."}
-            </p>
+          <div className="flex items-center gap-2 shrink-0">
             {currentProject?.github_repo_url && (
               <a
                 href={currentProject.github_repo_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-4 inline-flex items-center gap-2 rounded-[10px] border border-[var(--brand-border)] bg-white/80 px-4 py-2 text-[13px] font-medium text-[var(--brand)] no-underline backdrop-blur transition-colors hover:bg-[var(--brand-chip)]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#ece7f5] bg-white px-3 py-1.5 text-[12px] font-medium text-[#675f7e] no-underline transition-colors hover:bg-[#faf8fd]"
               >
-                <GitBranch size={14} />
-                View Repo
-                <ExternalLink size={11} className="text-[var(--brand)]" />
+                <GitBranch size={13} />
+                Repo
+                <ExternalLink size={10} />
               </a>
             )}
+            {!config.completed && (
+              <button
+                type="button"
+                onClick={() => navigate("/onboarding")}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3.5 py-1.5 text-[12px] font-semibold text-white transition-colors hover:opacity-90"
+              >
+                Onboard team
+                <ArrowRight size={13} />
+              </button>
+            )}
+            {config.completed && (
+              <button
+                type="button"
+                onClick={() => navigate("/onboarding")}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#ece7f5] bg-white px-3 py-1.5 text-[12px] font-medium text-[#675f7e] transition-colors hover:bg-[#faf8fd]"
+              >
+                Edit team
+              </button>
+            )}
           </div>
+        </div>
 
-          {/* Stat grid */}
-          <div className="grid shrink-0 grid-cols-3 gap-3 xl:grid-cols-5">
-            {stats.map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className="rounded-[18px] border border-white/70 bg-white/80 px-4 py-3 backdrop-blur min-w-[96px]">
-                <div className={`mb-2 inline-flex rounded-[8px] p-1.5 ${bg}`}>
-                  <Icon size={14} className={color} />
-                </div>
-                <p className="text-xl font-semibold text-[#1f1638]">{value}</p>
-                <p className="text-[10px] uppercase tracking-[0.15em] text-[#7a7390]">{label}</p>
+        {/* Inline stats row */}
+        <div className="mt-3 flex items-center gap-4 border-t border-[#ece7f5] pt-3">
+          {stats.map(({ label, value, icon: Icon, color }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <Icon size={13} className={color} />
+              <span className="text-[13px] font-semibold text-[#1f1638]">{value}</span>
+              <span className="text-[11px] text-[#7a7390]">{label}</span>
+            </div>
+          ))}
+        </div>
+      </header>
+
+      {/* ── Charts row ───────────────────────────────────────── */}
+      <section className="grid grid-cols-3 gap-3">
+        <div className="col-span-2">
+          <BudgetChart />
+        </div>
+        <TaskSummary />
+      </section>
+
+      {/* ── Live errors ──────────────────────────────────────── */}
+      <section className="rounded-xl border border-[#ece7f5] bg-white">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#ece7f5]">
+          <Bug size={14} className="text-[#675f7e]" />
+          <h2 className="text-[13px] font-semibold text-[#1f1638]">Live Errors</h2>
+          <span className="ml-auto text-[11px] text-[#7a7390]">Sentry</span>
+        </div>
+
+        {sentryLoading ? (
+          <div className="px-4 py-5 text-center text-[12px] text-[#7a7390]">Loading issues…</div>
+        ) : sentryIssues.length === 0 ? (
+          <div className="flex items-center gap-2 px-4 py-4 text-[12px] text-emerald-600">
+            <CheckCircle size={14} />
+            No unresolved issues — all clear.
+          </div>
+        ) : (
+          <div className="divide-y divide-[#ece7f5]">
+            {sentryIssues.slice(0, 5).map((issue) => (
+              <div key={issue.id} className="flex items-center gap-2.5 px-4 py-2.5">
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${levelColor[issue.level] ?? levelColor.info}`}>
+                  {issue.level}
+                </span>
+                <p className="flex-1 truncate text-[12px] text-[#1f1638]">{issue.title}</p>
+                {issue.permalink && (
+                  <a href={issue.permalink} target="_blank" rel="noreferrer" className="shrink-0 text-[#7a7390] hover:text-[var(--brand)]">
+                    <ExternalLink size={12} />
+                  </a>
+                )}
               </div>
             ))}
           </div>
-        </div>
+        )}
       </section>
 
-      {/* ── Charts row ──────────────────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2">
-            <BudgetChart />
-          </div>
-          <TaskSummary />
-        </div>
-      </section>
-
-      {/* ── Sentry issues ───────────────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-        <div className="mb-4 flex items-center gap-2">
-          <Bug size={16} className="text-[#675f7e]" />
-          <h3 className="text-[15px] font-semibold text-[#1f1638]">Live Errors</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">Powered by Sentry</span>
-        </div>
-        <div className="overflow-hidden rounded-[22px] border border-[#ece7f5] bg-white">
-          {sentryLoading ? (
-            <div className="p-6 text-center text-[13px] text-[#7a7390]">Loading issues…</div>
-          ) : sentryIssues.length === 0 ? (
-            <div className="flex items-center gap-3 p-6 text-[13px] text-emerald-600">
-              <CheckCircle size={15} />
-              No unresolved issues — all clear.
-            </div>
-          ) : (
-            <div className="divide-y divide-[#ece7f5]">
-              {sentryIssues.slice(0, 5).map((issue) => (
-                <div key={issue.id} className="flex items-center gap-3 px-5 py-3">
-                  <span className={`shrink-0 rounded-[6px] border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${levelColor[issue.level] ?? levelColor.info}`}>
-                    {issue.level}
-                  </span>
-                  <p className="flex-1 truncate text-[13px] text-[#1f1638]">{issue.title}</p>
-                  {issue.permalink && (
-                    <a href={issue.permalink} target="_blank" rel="noreferrer" className="shrink-0 text-[#7a7390] hover:text-[var(--brand)]">
-                      <ExternalLink size={13} />
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ── Agent grid ──────────────────────────────────────────── */}
-      <section className="rounded-[32px] border border-[#ece7f5] bg-[#f8f6fc] p-5 shadow-[0_20px_60px_-40px_rgba(42,26,92,0.25)]">
-        <div className="mb-4 flex items-center gap-2">
-          <Users size={15} className="text-[#675f7e]" />
-          <h3 className="text-[15px] font-semibold text-[#1f1638]">Agent Directory</h3>
-          <span className="ml-auto text-[11px] text-[#7a7390]">
-            Top {agentPreview.length} of {displayAgents.length} agents
+      {/* ── Agent directory ──────────────────────────────────── */}
+      <section className="rounded-xl border border-[#ece7f5] bg-white">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#ece7f5]">
+          <Users size={14} className="text-[#675f7e]" />
+          <h2 className="text-[13px] font-semibold text-[#1f1638]">Agent Directory</h2>
+          <span className="text-[11px] text-[#7a7390]">
+            {agentPreview.length} of {displayAgents.length}
           </span>
           <button
             type="button"
             onClick={() => navigate("/agents")}
-            className="inline-flex items-center gap-2 rounded-[12px] border border-[#e5def2] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#4d4761] transition-colors hover:bg-[#faf8fd]"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#ece7f5] bg-white px-3 py-1.5 text-[12px] font-medium text-[#675f7e] transition-colors hover:bg-[#faf8fd]"
           >
-            View All Agents
-            <ArrowRight size={14} />
+            View all
+            <ArrowRight size={12} />
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="divide-y divide-[#ece7f5]">
           {agentPreview.map((agent) => (
             <AgentCard key={agent.agent_id} agent={agent} />
           ))}
