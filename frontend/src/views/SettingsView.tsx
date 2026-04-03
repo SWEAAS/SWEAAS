@@ -64,6 +64,23 @@ export default function SettingsView() {
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
   useEffect(() => { fetchPreferences(); }, [fetchPreferences]);
 
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    projectApi.get(currentProject.id).then((res) => {
+      const proj = res.data;
+      const cfg = proj?.config ?? proj;
+      setConfig((prev) => ({
+        monthly_budget_usd: cfg.monthly_budget_usd ?? cfg.monthly_budget ?? prev.monthly_budget_usd,
+        timeline_weeks: cfg.timeline_weeks ?? prev.timeline_weeks,
+        departments: cfg.departments
+          ? (typeof cfg.departments === "string" ? cfg.departments.split(",").map((s: string) => s.trim()) : cfg.departments)
+          : prev.departments,
+        max_agents: cfg.max_agents ?? prev.max_agents,
+        github_username: cfg.github_username ?? prev.github_username,
+      }));
+    }).catch(() => { /* project may not have config yet */ });
+  }, [currentProject?.id]);
+
   const handleNotifSave = async () => {
     if (!preferences) return;
     setNotifSaving(true);

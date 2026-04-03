@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import FeedbackButton from "./FeedbackButton";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 
@@ -12,6 +13,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <FeedbackButton />
     </div>
   );
 }

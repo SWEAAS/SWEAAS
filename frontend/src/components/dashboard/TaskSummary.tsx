@@ -37,7 +37,7 @@ export default function TaskSummary() {
         items.push({
           id: s.session_id ?? s.id ?? crypto.randomUUID(),
           title: s.task ?? s.session_summary?.slice(0, 60) ?? "Orchestration session",
-          agent: "CTO Agent",
+          agent: s.lead_agent ?? s.agent_name ?? s.assigned_agent ?? "Agent",
           status: s.status ?? "completed",
         });
       }
@@ -48,8 +48,8 @@ export default function TaskSummary() {
           if (!items.some((t) => t.id === sid)) {
             items.unshift({
               id: sid,
-              title: "Active orchestration session",
-              agent: `${statusRes.data.active_agents ?? 0} agents`,
+              title: statusRes.data.current_task ?? "Active session",
+              agent: `${statusRes.data.active_agents ?? 0} agent${(statusRes.data.active_agents ?? 0) === 1 ? "" : "s"}`,
               status: "running",
             });
           }

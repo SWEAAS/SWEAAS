@@ -53,7 +53,8 @@ async def _ensure_dev_user() -> None:
             existing_user = result.scalar_one_or_none()
             if existing_user is not None:
                 existing_user.email = "user@sweaas.dev"
-                existing_user.full_name = "Dev User"
+                if not existing_user.full_name:
+                    existing_user.full_name = "Dev User"
                 existing_user.role = "owner"
                 await session.commit()
                 return

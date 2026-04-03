@@ -388,7 +388,7 @@ export default function OrgChartView() {
                 <Users size={14} />
                 Total agents
               </div>
-              <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{agents.length}</p>
+              <p className="mt-2 text-2xl font-semibold text-[#1f1638]">{displayAgents.length}</p>
             </div>
             <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 backdrop-blur">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#7a7390]">
@@ -410,9 +410,9 @@ export default function OrgChartView() {
                 Avg load
               </div>
               <p className="mt-2 text-2xl font-semibold text-[#1f1638]">
-                {agents.length
+                {displayAgents.length
                   ? `${Math.round(
-                      agents.reduce((sum, agent) => sum + usagePercent(agent), 0) / agents.length,
+                      displayAgents.reduce((sum, agent) => sum + usagePercent(agent), 0) / displayAgents.length,
                     )}%`
                   : "0%"}
               </p>

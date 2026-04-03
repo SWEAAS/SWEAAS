@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import api from "../api/client";
 
 interface User {
   uid: string;
@@ -15,25 +16,52 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   setUser: (user: User, token: string) => void;
+  fetchProfile: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: localStorage.getItem("sweaas_token"),
   isAuthenticated: !!localStorage.getItem("sweaas_token"),
 
   login: async (_email: string, _password: string) => {
-    // In production, this calls Supabase Auth
-    const devUser: User = {
-      uid: "dev-user",
-      email: _email,
-      full_name: "Dev User",
-      github_username: "",
-      role: _email === "user@sweaas.dev" ? "owner" : "authenticated",
-    };
+    // Dev mode: set a dev token so the backend auth middleware accepts requests.
+    // In production this would go through Supabase Auth and return a real JWT.
     const devToken = "dev-token";
     localStorage.setItem("sweaas_token", devToken);
-    set({ user: devUser, token: devToken, isAuthenticated: true });
+    set({ token: devToken, isAuthenticated: true });
+
+    // Immediately fetch the real user profile from the backend
+    await get().fetchProfile();
+  },
+
+  fetchProfile: async () => {
+    try {
+      const res = await api.get("/auth/me");
+      const profile = res.data;
+      set({
+        user: {
+          uid: profile.uid ?? profile.id ?? "unknown",
+          email: profile.email ?? "",
+          full_name: profile.full_name ?? profile.name ?? "User",
+          github_username: profile.github_username ?? "",
+          role: profile.role ?? "authenticated",
+        },
+      });
+    } catch {
+      // Fallback for dev mode when backend is unreachable
+      if (!get().user) {
+        set({
+          user: {
+            uid: "dev-user",
+            email: "user@sweaas.dev",
+            full_name: "Dev User",
+            github_username: "",
+            role: "owner",
+          },
+        });
+      }
+    }
   },
 
   logout: () => {

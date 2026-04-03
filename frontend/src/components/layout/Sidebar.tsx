@@ -14,6 +14,7 @@ import {
   Video,
 } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+import { useNotificationStore } from "../../store/notificationStore";
 
 const navItems = [
   { to: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },
@@ -31,6 +32,7 @@ const navItems = [
 
 export default function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
   return (
     <aside
@@ -117,6 +119,26 @@ export default function Sidebar() {
           >
             <Icon size={16} strokeWidth={1.8} />
             {label}
+            {label === "Notifications" && unreadCount > 0 && (
+              <span
+                style={{
+                  marginLeft: "auto",
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 20,
+                  background: "#dc2626",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#fff",
+                  padding: "0 5px",
+                }}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

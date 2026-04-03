@@ -23,6 +23,7 @@ export interface ReportSection {
   title: string;
   body?: string;
   bullets?: string[];
+  created_at?: string;
 }
 
 interface CtoReportProps {
@@ -30,6 +31,7 @@ interface CtoReportProps {
   subtitle: string;
   contributors: ReportContributor[];
   sections?: ReportSection[];
+  channelName?: string;
 }
 
 function initials(name: string) {
@@ -86,58 +88,32 @@ const departmentAccent: Record<string, string> = {
   support: "#8b5cf6",
 };
 
-const reportSections = [
+const DEFAULT_SECTIONS: ReportSection[] = [
   {
-    id: "executive-summary",
-    eyebrow: "Executive summary",
-    title: "What happened",
-    body:
-      "Project Galaxy is moving in the right direction. The engineering lane cleared the riskiest UI integration bugs, product tightened the onboarding narrative, and support themes show that users want the setup flow to feel more guided before they trust the org to run on its own.",
-  },
-  {
-    id: "wins",
-    eyebrow: "Key wins",
-    title: "What worked well",
-    bullets: [
-      "The internal call flow now understands who you are calling, not just which Tavus face to show.",
-      "Large-team onboarding can reuse faces without breaking org hierarchy or display names.",
-      "Admin Tavus configuration checks make replica-versus-persona failures obvious before a call starts.",
-    ],
-  },
-  {
-    id: "risks",
-    eyebrow: "Risks",
-    title: "What needs attention",
-    bullets: [
-      "The internal Tavus persona is still the external dependency most likely to block demos if it drifts.",
-      "Report content is currently mocked, so this page is styled and structured before the live report feed is wired in.",
-      "Very large orgs still need a browser-level polish pass once real report payloads get denser.",
-    ],
-  },
-  {
-    id: "next-steps",
-    eyebrow: "Next steps",
-    title: "What I recommend next",
-    bullets: [
-      "Wire this report shell to live observability and project-report data.",
-      "Add a small CTA to rerun Tavus config checks from the report context.",
-      "Let reports open from the HQ or Cto surfaces so the narrative feels continuous across the product.",
-    ],
+    id: "empty-state",
+    eyebrow: "No data yet",
+    title: "Waiting for report data",
+    body: "Execute an orchestration task to generate your first CTO direction report. Reports are generated automatically after each session completes.",
   },
 ];
 
-export default function CtoReport({ title, subtitle, contributors }: CtoReportProps) {
+export default function CtoReport({ title, subtitle, contributors, sections, channelName: channelNameProp }: CtoReportProps) {
   const navigate = useNavigate();
-  const channelName = title.replace(/\s+delivery debrief$/i, "").toLowerCase().replace(/\s+/g, "-");
+  const channelName = channelNameProp || title.replace(/\s+delivery debrief$/i, "").toLowerCase().replace(/\s+/g, "-");
   const [showContributorsPanel, setShowContributorsPanel] = useState(false);
+  const activeSections = sections && sections.length > 0 ? sections : DEFAULT_SECTIONS;
   const reportFeed = useMemo(
     () =>
-      reportSections.map((section, index) => ({
+      activeSections.map((section, index) => ({
         ...section,
         author: contributors[index % Math.max(contributors.length, 1)] ?? null,
-        timeLabel: ["9:12 AM", "9:18 AM", "9:26 AM", "9:34 AM"][index] ?? "9:40 AM",
+        timeLabel: section.id !== "empty-state"
+          ? (section.created_at
+              ? new Date(section.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+              : new Date(Date.now() - (activeSections.length - index) * 480_000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))
+          : "",
       })),
-    [contributors],
+    [activeSections, contributors],
   );
 
   return (
@@ -147,7 +123,7 @@ export default function CtoReport({ title, subtitle, contributors }: CtoReportPr
           <div className="relative flex items-center justify-end gap-4">
             <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-[#1f1638]">
               <span className="text-[20px] font-semibold tracking-[-0.03em]">#</span>
-              <span className="text-[16px] font-semibold tracking-[-0.03em]">{channelName || "project-galaxy"}</span>
+              <span className="text-[16px] font-semibold tracking-[-0.03em]">{channelName || "reports"}</span>
               <ChevronDown size={16} className="text-[#8a82a0]" />
             </div>
 

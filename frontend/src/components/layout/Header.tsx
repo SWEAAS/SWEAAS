@@ -317,7 +317,7 @@ export default function Header() {
             {initials}
           </div>
           <span style={{ fontSize: 13, fontWeight: 500, color: "#675f7e" }}>
-            {user?.email ?? "user@sweaas.dev"}
+            {user?.email ?? "—"}
           </span>
         </div>
       </div>

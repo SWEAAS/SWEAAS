@@ -14,13 +14,22 @@ import OrgChartView from "./views/OrgChartView";
 import ReportsView from "./views/ReportsView";
 import RevenueView from "./views/RevenueView";
 import SettingsView from "./views/SettingsView";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
 const HQView = lazy(() => import("./three/HQView"));
 const WelcomeHWView = lazy(() => import("./three/WelcomeHWView"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
+  const fetchProfile = useAuthStore((s) => s.fetchProfile);
+
+  useEffect(() => {
+    if (isAuthenticated && !user) {
+      fetchProfile();
+    }
+  }, [isAuthenticated, user, fetchProfile]);
+
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
