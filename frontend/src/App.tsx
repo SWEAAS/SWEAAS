@@ -18,7 +18,8 @@ import RevenueView from "./views/RevenueView";
 import SettingsView from "./views/SettingsView";
 import { lazy, Suspense, useEffect } from "react";
 
-const HQView = lazy(() => import("./three/HQView"));
+// The unified HQ experience — campus exterior + interactive office interior —
+// lives at /welcome-hw. Legacy /hq URLs redirect here (see route below).
 const WelcomeHWView = lazy(() => import("./three/WelcomeHWView"));
 
 function ProtectedRoute({ children, requireOnboarding = true }: { children: React.ReactNode; requireOnboarding?: boolean }) {
@@ -100,7 +101,7 @@ export default function App() {
           >
             <Route path="/dashboard" element={<DashboardView />} />
             <Route
-              path="/hq"
+              path="/welcome-hw"
               element={
                 <Suspense
                   fallback={
@@ -109,24 +110,13 @@ export default function App() {
                     </div>
                   }
                 >
-                  <HQView />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/welcome-hw"
-              element={
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center h-96 text-sweaas-text-secondary">
-                      Loading 3D Building...
-                    </div>
-                  }
-                >
                   <WelcomeHWView />
                 </Suspense>
               }
             />
+            {/* Legacy /hq URL — redirect to the unified welcome scene so old
+                links from org chart, notifications, etc. still work. */}
+            <Route path="/hq" element={<Navigate to="/welcome-hw" replace />} />
             <Route path="/agents" element={<AgentDirectoryView />} />
             <Route path="/org-chart" element={<OrgChartView />} />
             <Route path="/budget" element={<DashboardView />} />
