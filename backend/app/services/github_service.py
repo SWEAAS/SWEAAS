@@ -27,7 +27,9 @@ class GitHubService:
         """Obtain a short-lived installation access token.
 
         In production this uses JWT signed with the App private key.
-        Returns a placeholder in dev mode when credentials are absent.
+        Returns a placeholder in dev mode when credentials are absent or the
+        private key file is unreadable (so downstream flows can degrade
+        gracefully instead of 500ing on repo creation).
         """
         if not settings.github_app_id or not settings.github_app_private_key_path:
             logger.warning("GitHub App credentials not configured — returning dev token.")
@@ -39,8 +41,16 @@ class GitHubService:
 
         import jwt as pyjwt
 
-        with open(settings.github_app_private_key_path) as f:
-            private_key = f.read()
+        try:
+            with open(settings.github_app_private_key_path) as f:
+                private_key = f.read()
+        except OSError as exc:
+            logger.warning(
+                "GitHub App private key unreadable at %s (%s) — degrading to dev token.",
+                settings.github_app_private_key_path,
+                exc,
+            )
+            return "dev-token"
 
         now = int(time.time())
         payload = {

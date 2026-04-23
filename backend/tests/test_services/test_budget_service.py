@@ -116,13 +116,15 @@ class TestGetAgentConsumption:
 
 
 class TestCreateCheckoutSession:
-    def test_dev_fallback_when_no_key(self):
+    def test_raises_when_no_key(self):
+        """When Stripe isn't configured we surface an error instead of returning a fake URL."""
+        from fastapi import HTTPException
         with patch("app.services.budget_service.settings") as mock_settings:
             mock_settings.stripe_secret_key = ""
             svc = BudgetService()
-            resp = asyncio.run(svc.create_checkout_session("proj-1", "price_abc"))
-            assert resp.session_id == "cs_dev_placeholder"
-            assert "dev-placeholder" in resp.checkout_url
+            with pytest.raises(HTTPException) as excinfo:
+                asyncio.run(svc.create_checkout_session("proj-1", "price_abc"))
+            assert excinfo.value.status_code == 503
 
     @patch("stripe.checkout.Session.create")
     def test_creates_real_session(self, mock_stripe_create):

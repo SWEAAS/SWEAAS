@@ -138,9 +138,15 @@ class BudgetService:
         self, project_id: str, price_id: str
     ) -> StripeCheckoutResponse:
         if not settings.stripe_secret_key:
-            return StripeCheckoutResponse(
-                checkout_url="https://checkout.stripe.com/dev-placeholder",
-                session_id="cs_dev_placeholder",
+            # Never return a fake URL — the user would land on a 404. Surface
+            # the misconfiguration so the caller can show a real error.
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Billing is not configured. Set STRIPE_SECRET_KEY on the "
+                    "backend to enable checkout."
+                ),
             )
 
         import stripe

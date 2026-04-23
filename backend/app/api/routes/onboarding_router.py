@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_onboarding_service
+from app.core.user_provisioning import ensure_org_id
 from app.models.agent import AgentConfig
 from app.models.notification import NotificationPreference
 from app.models.project import Project, ProjectConfig
@@ -34,12 +35,8 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 
 async def _resolve_org_id(user: AuthenticatedUser, db: AsyncSession) -> str:
-    stmt = select(User.organization_id).where(User.supabase_uid == user.uid)
-    result = await db.execute(stmt)
-    org_id = result.scalar_one_or_none()
-    if org_id is None:
-        raise HTTPException(status_code=400, detail="User is not associated with an organization.")
-    return str(org_id)
+    """Return the caller's org UUID as a string, auto-provisioning on first hit."""
+    return str(await ensure_org_id(db, user))
 
 
 @router.get("/departments", response_model=list[DepartmentOption])
@@ -133,14 +130,23 @@ _TOKEN_BUDGETS: dict[str, int] = {
 
 
 async def _ensure_default_project(org_id: UUID, budget_usd: float, db: AsyncSession) -> Project:
-    """Return the first project for the org, creating one if none exists."""
+    """Return the first project for the org, creating one if none exists.
+
+    Loads ``ProjectConfig`` explicitly rather than via lazy relationship access
+    so we stay within AsyncSession semantics (no implicit IO on attribute read).
+    """
     result = await db.execute(
         select(Project).where(Project.organization_id == org_id).limit(1)
     )
     project = result.scalar_one_or_none()
     if project is not None:
-        if project.config:
-            project.config.monthly_budget_usd = budget_usd
+        cfg_stmt = select(ProjectConfig).where(ProjectConfig.project_id == project.id)
+        config = (await db.execute(cfg_stmt)).scalar_one_or_none()
+        if config is None:
+            config = ProjectConfig(project_id=project.id, monthly_budget_usd=budget_usd)
+            db.add(config)
+        else:
+            config.monthly_budget_usd = budget_usd
         return project
 
     org = (await db.execute(select(Organization).where(Organization.id == org_id))).scalar_one()

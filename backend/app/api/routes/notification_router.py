@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_notification_service
+from app.core.user_provisioning import ensure_db_user
 from app.models.user import User
 from app.schemas.notification_schema import (
     ContactInfoUpdateRequest,
@@ -28,11 +29,8 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
 async def _resolve_user(user: AuthenticatedUser, db: AsyncSession) -> User:
-    result = await db.execute(select(User).where(User.supabase_uid == user.uid))
-    db_user = result.scalar_one_or_none()
-    if db_user is None:
-        raise HTTPException(status_code=400, detail="User not found in database.")
-    return db_user
+    """Return the caller's DB row, auto-provisioning on first authenticated hit."""
+    return await ensure_db_user(db, user)
 
 
 # ── Notification list / counts ───────────────────────────────────
