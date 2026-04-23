@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
 from app.core.dependencies import get_github_service, get_greptile_service, get_sentry_service
+from app.core.user_provisioning import ensure_org_id
 from app.models.project import Project, ProjectConfig
 from app.models.user import User
 from app.schemas.project_schema import (
@@ -30,16 +31,8 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 async def _resolve_org_id(user: AuthenticatedUser, db: AsyncSession) -> UUID:
-    """Look up the user's organization from the DB."""
-    stmt = select(User.organization_id).where(User.supabase_uid == user.uid)
-    result = await db.execute(stmt)
-    org_id = result.scalar_one_or_none()
-    if org_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="User is not associated with an organization.",
-        )
-    return org_id
+    """Return the caller's org UUID, auto-provisioning on first authenticated hit."""
+    return await ensure_org_id(db, user)
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
@@ -65,8 +58,16 @@ async def create_project(
     slug = re.sub(r"[^a-z0-9-]", "-", request.name.lower()).strip("-")[:100]
     repo_name = f"project-{slug}"
 
-    repo = await github_service.create_repository(repo_name, private=True)
-    repo_url = repo.get("html_url")
+    repo_url: str | None = None
+    try:
+        repo = await github_service.create_repository(repo_name, private=True)
+        repo_url = repo.get("html_url")
+    except Exception:
+        logger.warning(
+            "GitHub repo creation failed for %s — continuing without it",
+            repo_name,
+            exc_info=True,
+        )
 
     try:
         await greptile_service.index_repository(repo_name)
@@ -108,8 +109,16 @@ async def create_project(
     db.add(project)
     await db.flush()
 
-    if request.github_username:
-        await github_service.add_collaborator(repo_name, request.github_username)
+    if request.github_username and repo_url:
+        try:
+            await github_service.add_collaborator(repo_name, request.github_username)
+        except Exception:
+            logger.warning(
+                "Could not add collaborator %s to %s — continuing",
+                request.github_username,
+                repo_name,
+                exc_info=True,
+            )
 
     return ProjectResponse(
         id=str(project.id),

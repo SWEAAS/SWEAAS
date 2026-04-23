@@ -297,9 +297,61 @@ export const orchestrationApi = {
   status: (projectId: string) => api.get(`/orchestration/status/${projectId}`),
   sessions: (projectId: string) => api.get(`/orchestration/sessions/${projectId}`),
   reports: (projectId: string) => api.get(`/orchestration/reports/${projectId}`),
+  reportDetail: (projectId: string, reportId: string) =>
+    api.get(`/orchestration/reports/${projectId}/${reportId}`),
   reportPdf: (projectId: string, reportId: string) =>
     api.get(`/orchestration/reports/${projectId}/${reportId}/pdf`),
+  // Direct URLs for <a href="..." download> buttons. They respect the base
+  // URL set via VITE_API_BASE_URL (or the dev proxy) and include the auth
+  // header automatically because the browser replays localStorage cookies —
+  // for JWT-protected downloads we fetch via axios and turn the blob into
+  // an object URL instead. See `downloadReportMarkdown` below.
+  reportMarkdownUrl: (projectId: string, reportId: string) =>
+    `${api.defaults.baseURL ?? ""}/orchestration/reports/${projectId}/${reportId}/markdown`,
+  reportPdfUrl: (projectId: string, reportId: string) =>
+    `${api.defaults.baseURL ?? ""}/orchestration/reports/${projectId}/${reportId}/pdf`,
+  // JWT-safe downloaders: fetch the response as a blob with the auth header
+  // attached, then trigger a browser download.
+  async downloadReportMarkdown(projectId: string, reportId: string, filename: string) {
+    const res = await api.get(`/orchestration/reports/${projectId}/${reportId}/markdown`, {
+      responseType: "blob",
+    });
+    triggerBlobDownload(res.data, filename);
+  },
+  async downloadReportPdf(projectId: string, reportId: string, filename: string) {
+    const res = await api.get(`/orchestration/reports/${projectId}/${reportId}/pdf`, {
+      responseType: "blob",
+    });
+    // When S3 is configured the server may return a JSON `{download_url}`
+    // payload instead of the PDF bytes. Handle both.
+    if (res.data instanceof Blob && res.data.type.includes("application/pdf")) {
+      triggerBlobDownload(res.data, filename);
+      return;
+    }
+    const text = await (res.data as Blob).text().catch(() => "");
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.download_url) {
+        window.open(parsed.download_url, "_blank", "noopener,noreferrer");
+        return;
+      }
+    } catch {
+      // fallthrough
+    }
+    triggerBlobDownload(res.data as Blob, filename);
+  },
 };
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // ── Feedback API ────────────────────────────────────────────────
 

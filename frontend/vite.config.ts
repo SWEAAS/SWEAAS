@@ -3,7 +3,10 @@ import react from "@vitejs/plugin-react";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { defineConfig } from "vite";
 
+// Read .env from the repo root (single source of truth — see local_dev.md).
+// CI/hosted builds inject VITE_* via process.env, which still wins here.
 export default defineConfig({
+  envDir: "../",
   build: {
     sourcemap: true,
   },

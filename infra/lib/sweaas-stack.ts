@@ -311,13 +311,15 @@ export class SweaasStack extends cdk.Stack {
         APP_VERSION: "0.1.0",
         API_PREFIX: "/api/v1",
         ENVIRONMENT: "production",
+        // Production: only our own origins. Local dev uses localhost via the
+        // Vite proxy and never reaches the prod ALB, so no localhost entry.
         CORS_ORIGINS: [
           `https://${domainName}`,
           `https://www.${domainName}`,
-          "http://localhost:5173",
-          "http://localhost:3000",
         ].join(","),
-        AUTH_ENFORCE_JWT: "false",
+        // Require Supabase JWT in production. The backend refuses to start
+        // if SUPABASE_URL is empty — those values come from appSecrets below.
+        AUTH_ENFORCE_JWT: "true",
         CHROMA_HOST: "chromadb.sweaas.local",
         CHROMA_PORT: "8000",
         REDIS_URL: redisEndpoint,
@@ -330,6 +332,32 @@ export class SweaasStack extends cdk.Stack {
         SENTRY_TEAM: "sweaas",
         GITHUB_ORG_NAME: "SWEAAS",
         GITHUB_APP_PRIVATE_KEY_PATH: "/app/backend/github-app-key.pem",
+      },
+      // Pull vendor API keys out of Secrets Manager (JSON-structured secret).
+      // Populate the actual values via the AWS console or `aws secretsmanager
+      // put-secret-value --secret-id sweaas/app-secrets --secret-string '{...}'`
+      // before running `cdk deploy` — an empty SUPABASE_URL with
+      // AUTH_ENFORCE_JWT=true will cause the task to exit on startup.
+      secrets: {
+        SUPABASE_URL: ecs.Secret.fromSecretsManager(appSecrets, "SUPABASE_URL"),
+        SUPABASE_PUBLISHABLE_KEY: ecs.Secret.fromSecretsManager(appSecrets, "SUPABASE_PUBLISHABLE_KEY"),
+        SUPABASE_SECRET_KEY: ecs.Secret.fromSecretsManager(appSecrets, "SUPABASE_SECRET_KEY"),
+        OPENAI_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "OPENAI_API_KEY"),
+        ANTHROPIC_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "ANTHROPIC_API_KEY"),
+        XAI_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "XAI_API_KEY"),
+        E2B_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "E2B_API_KEY"),
+        SENTRY_DSN: ecs.Secret.fromSecretsManager(appSecrets, "SENTRY_DSN"),
+        SENTRY_AUTH_TOKEN: ecs.Secret.fromSecretsManager(appSecrets, "SENTRY_AUTH_TOKEN"),
+        STRIPE_SECRET_KEY: ecs.Secret.fromSecretsManager(appSecrets, "STRIPE_SECRET_KEY"),
+        STRIPE_PUBLISHABLE_KEY: ecs.Secret.fromSecretsManager(appSecrets, "STRIPE_PUBLISHABLE_KEY"),
+        STRIPE_WEBHOOK_SECRET: ecs.Secret.fromSecretsManager(appSecrets, "STRIPE_WEBHOOK_SECRET"),
+        AGENTMAIL_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "AGENTMAIL_API_KEY"),
+        TAVUS_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "TAVUS_API_KEY"),
+        GITHUB_APP_ID: ecs.Secret.fromSecretsManager(appSecrets, "GITHUB_APP_ID"),
+        GITHUB_CLIENT_ID: ecs.Secret.fromSecretsManager(appSecrets, "GITHUB_CLIENT_ID"),
+        GITHUB_WEBHOOK_SECRET: ecs.Secret.fromSecretsManager(appSecrets, "GITHUB_WEBHOOK_SECRET"),
+        LANGCHAIN_API_KEY: ecs.Secret.fromSecretsManager(appSecrets, "LANGCHAIN_API_KEY"),
+        FEEDBACK_WEBHOOK_URL: ecs.Secret.fromSecretsManager(appSecrets, "FEEDBACK_WEBHOOK_URL"),
       },
       portMappings: [{ containerPort: 8000 }],
       healthCheck: {

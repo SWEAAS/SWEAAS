@@ -9,18 +9,28 @@ export default function CustomerCallPreview() {
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const startPreview = async () => {
     if (!topic.trim() || !currentProject) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await communicationApi.customerCall({
         project_id: currentProject.id,
         topic,
       });
-      setCallUrl(res.data.conversation_url);
-    } catch {
-      setCallUrl("https://meet.sweaas.dev/customer-demo");
+      const url = res.data?.conversation_url;
+      if (!url) {
+        setError("The server didn't return a call URL. Try again in a moment.");
+      } else {
+        setCallUrl(url);
+      }
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Could not start the preview call. Check that your Tavus persona is configured.";
+      setError(msg);
     }
     setLoading(false);
   };
@@ -93,6 +103,12 @@ export default function CustomerCallPreview() {
               <Phone size={16} />
               {loading ? "Connecting..." : "Start Preview Call"}
             </button>
+            {error ? (
+              <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            ) : null}
           </div>
 
           {/* Integration snippet */}

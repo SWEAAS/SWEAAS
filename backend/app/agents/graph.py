@@ -17,8 +17,9 @@ The graph enforces deterministic communication:
 
 import logging
 
-from langgraph.graph import END, Send, StateGraph
+from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Send
 
 from app.agents.nodes.aggregator import aggregator_node
 from app.agents.nodes.cto import cto_node

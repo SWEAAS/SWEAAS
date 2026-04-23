@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.database import get_db
+from app.core.user_provisioning import ensure_db_user
 from app.models.user import Organization, User
 
 logger = logging.getLogger(__name__)
@@ -32,10 +33,13 @@ async def list_organizations(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[OrganizationResponse]:
-    """List organizations the current user belongs to."""
-    stmt = select(User).where(User.supabase_uid == user.uid)
-    db_user = (await db.execute(stmt)).scalar_one_or_none()
-    if not db_user or not db_user.organization_id:
+    """List organizations the current user belongs to.
+
+    Auto-provisions the user + org on first authenticated hit so a fresh
+    Supabase signup sees their org here without first calling /auth/me.
+    """
+    db_user = await ensure_db_user(db, user)
+    if not db_user.organization_id:
         return []
 
     org = await db.get(Organization, db_user.organization_id)

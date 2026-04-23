@@ -13,6 +13,7 @@ from app.api.middleware.auth import AuthenticatedUser, get_current_user
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import get_stripe_connect_service
+from app.core.user_provisioning import ensure_db_user, ensure_org_id
 from app.models.stripe import ConnectedAccount
 from app.models.user import User
 from app.schemas.common_schema import MessageResponse
@@ -34,22 +35,13 @@ router = APIRouter(prefix="/stripe", tags=["stripe"])
 
 
 async def _resolve_org_id(user: AuthenticatedUser, db: AsyncSession):
-    """Look up the user's organization from the DB."""
-    stmt = select(User.organization_id).where(User.supabase_uid == user.uid)
-    result = await db.execute(stmt)
-    org_id = result.scalar_one_or_none()
-    if org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is not associated with an organization.",
-        )
-    return org_id
+    """Return the caller's org UUID, auto-provisioning on first authenticated hit."""
+    return await ensure_org_id(db, user)
 
 
 async def _resolve_user_email(user: AuthenticatedUser, db: AsyncSession) -> str:
-    stmt = select(User.email).where(User.supabase_uid == user.uid)
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none() or ""
+    db_user = await ensure_db_user(db, user)
+    return db_user.email or ""
 
 
 # ── Connect onboarding ──────────────────────────────────────────

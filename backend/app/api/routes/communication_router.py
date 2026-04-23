@@ -182,8 +182,30 @@ async def list_replicas(
     user: Annotated[AuthenticatedUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TavusReplicaListResponse:
-    """Return stored Tavus replicas from the local catalog for user-facing flows."""
+    """Return stored Tavus replicas from the local catalog for user-facing flows.
+
+    On a fresh install the ``replica_profiles`` table is empty — the CTO face
+    picker in onboarding would then block users forever. If the local catalog
+    is empty we lazy-seed it from the live Tavus API on the first request.
+    If Tavus itself is unavailable we degrade to an empty list rather than
+    hard-failing the whole onboarding screen.
+    """
     replicas = await replica_catalog_service.list_stored_replicas(db)
+    if not replicas:
+        try:
+            seeded = await replica_catalog_service.sync_live_to_db(db)
+            if seeded:
+                replicas = await replica_catalog_service.list_stored_replicas(db)
+        except HTTPException:
+            logger.warning(
+                "Tavus replica seed failed — returning empty catalogue so the UI can show a fallback.",
+                exc_info=True,
+            )
+        except Exception:
+            logger.warning(
+                "Unexpected error seeding replica catalogue — returning empty list.",
+                exc_info=True,
+            )
     return TavusReplicaListResponse(
         replicas=[
             TavusReplica(

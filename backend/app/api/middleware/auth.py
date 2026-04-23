@@ -22,12 +22,23 @@ def _jwks_client(supabase_url: str) -> PyJWKClient:
 
 
 class AuthenticatedUser:
-    """Represents a verified Supabase user extracted from a JWT."""
+    """Represents a verified Supabase user extracted from a JWT.
 
-    def __init__(self, uid: str, email: str, role: str = "authenticated"):
+    Carries the decoded payload so downstream provisioning helpers can read
+    ``user_metadata`` without re-decoding the token.
+    """
+
+    def __init__(
+        self,
+        uid: str,
+        email: str,
+        role: str = "authenticated",
+        jwt_payload: dict[str, Any] | None = None,
+    ):
         self.uid = uid
         self.email = email
         self.role = role
+        self.jwt_payload: dict[str, Any] = jwt_payload or {}
 
 
 def decode_supabase_jwt(token: str) -> dict[str, Any]:
@@ -93,4 +104,5 @@ async def get_current_user(
         uid=payload.get("sub", ""),
         email=payload.get("email", ""),
         role=payload.get("role", "authenticated"),
+        jwt_payload=payload,
     )

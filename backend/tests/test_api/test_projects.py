@@ -37,17 +37,24 @@ class FakeProject:
 @pytest.fixture
 def mock_db():
     session = AsyncMock()
-    # _resolve_org_id: select User.organization_id where supabase_uid == "dev-user"
+    # ensure_db_user selects the full User row (not just organization_id).
+    org_id = "00000000-0000-0000-0000-000000000001"
+    fake_user = MagicMock()
+    fake_user.supabase_uid = "dev-user"
+    fake_user.email = "user@sweaas.dev"
+    fake_user.organization_id = org_id
+    fake_user.role = "owner"
+    fake_user.onboarding_completed = True
     result_mock = MagicMock()
-    result_mock.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000001"
+    result_mock.scalar_one_or_none.return_value = fake_user
     session.execute.return_value = result_mock
     session.flush = AsyncMock()
     session.commit = AsyncMock()
     session.refresh = AsyncMock()
-    
+
     async def fake_get_db():
         yield session
-    
+
     return fake_get_db, session
 
 
@@ -105,7 +112,13 @@ def test_list_projects_empty(project_client):
         call_count[0] += 1
         if call_count[0] <= 1:
             mock = MagicMock()
-            mock.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000001"
+            fu = MagicMock()
+            fu.supabase_uid = "dev-user"
+            fu.email = "user@sweaas.dev"
+            fu.organization_id = "00000000-0000-0000-0000-000000000001"
+            fu.role = "owner"
+            fu.onboarding_completed = True
+            mock.scalar_one_or_none.return_value = fu
             return mock
         else:
             mock = MagicMock()
@@ -126,7 +139,13 @@ def test_get_project_not_found(project_client):
         call_count[0] += 1
         if call_count[0] <= 1:
             mock = MagicMock()
-            mock.scalar_one_or_none.return_value = "00000000-0000-0000-0000-000000000001"
+            fu = MagicMock()
+            fu.supabase_uid = "dev-user"
+            fu.email = "user@sweaas.dev"
+            fu.organization_id = "00000000-0000-0000-0000-000000000001"
+            fu.role = "owner"
+            fu.onboarding_completed = True
+            mock.scalar_one_or_none.return_value = fu
             return mock
         else:
             mock = MagicMock()
