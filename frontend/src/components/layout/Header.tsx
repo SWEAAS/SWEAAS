@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Search } from "lucide-react";
+import { Bell, ChevronDown, Plus, Search } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 import { useNotificationStore } from "../../store/notificationStore";
 import { useProjectStore } from "../../store/projectStore";
 import NotificationPanel from "./NotificationPanel";
+import NewProjectModal from "./NewProjectModal";
 
 const statusDot: Record<string, string> = {
   active:   "#059669",
@@ -17,6 +18,7 @@ export default function Header() {
     useProjectStore();
   const { unreadCount, fetchCounts, togglePanel } = useNotificationStore();
   const [open, setOpen] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
@@ -131,7 +133,7 @@ export default function Header() {
           >
             {projects.length === 0 ? (
               <p style={{ padding: "10px 12px", fontSize: 13, color: "#7a7390" }}>
-                No projects found
+                No projects in this organization yet.
               </p>
             ) : (
               projects.map((p) => (
@@ -198,9 +200,43 @@ export default function Header() {
                 </button>
               ))
             )}
+            <div style={{ height: 1, background: "#ece7f5", margin: "6px 0" }} />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setShowNewProject(true);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "9px 12px",
+                background: "transparent",
+                border: "none",
+                borderRadius: 9,
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--brand)",
+                transition: "background 0.12s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "var(--brand-surface)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+              }}
+            >
+              <Plus size={13} />
+              New project
+            </button>
           </div>
         )}
       </div>
+      {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} />}
 
       {/* Right: search + bell + avatar */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>

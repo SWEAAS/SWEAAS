@@ -56,6 +56,12 @@ interface HQSceneProps {
   agents: Agent[];
   onAgentClick: (agent: Agent) => void;
   cameraMode: "overview" | "walkthrough";
+  /**
+   * When true, the overview OrbitControls auto-rotate — used by the scripted
+   * Tour mode in the unified /welcome-hw view so the user sees a slow sweep
+   * of the office without having to drag.
+   */
+  autoRotate?: boolean;
 }
 
 // ─── Scene ───────────────────────────────────────────────────────────────────
@@ -64,6 +70,7 @@ export default function HQScene({
   agents,
   onAgentClick,
   cameraMode,
+  autoRotate = false,
 }: HQSceneProps) {
   const companyName =
     useProjectStore((s) => s.currentProject?.name) ?? "SWEAAS HQ";
@@ -300,6 +307,8 @@ export default function HQScene({
           maxPolarAngle={Math.PI / 2.1}
           minDistance={8}
           maxDistance={100}
+          autoRotate={autoRotate}
+          autoRotateSpeed={0.6}
         />
       )}
     </Canvas>

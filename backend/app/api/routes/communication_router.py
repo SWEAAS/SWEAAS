@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Annotated, Any
@@ -72,6 +73,98 @@ async def _fetch_project_data(
         data["timeline_weeks"] = project.config.timeline_weeks
         data["departments"] = project.config.departments
     return data
+
+
+async def _fetch_recent_session_summaries(
+    db: AsyncSession, project_id: str, limit: int = 3
+) -> str:
+    """Return a compact bullet-list of the project's last N session reports.
+
+    Injected into the Tavus conversational context so the CTO persona can
+    answer "what have the agents been working on?" with real recent work
+    instead of a generic reply. Each entry is truncated to keep the total
+    context under Tavus's conversational_context budget.
+    """
+    import json as _json
+    from uuid import UUID as _UUID
+
+    from app.models.task import Report
+
+    try:
+        stmt = (
+            select(Report)
+            .where(Report.project_id == _UUID(project_id))
+            .order_by(Report.created_at.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        reports = result.scalars().all()
+    except Exception:
+        logger.debug("Could not fetch recent session summaries for %s", project_id, exc_info=True)
+        return ""
+
+    lines: list[str] = []
+    for r in reports:
+        try:
+            meta = _json.loads(r.summary or "{}")
+        except (TypeError, ValueError):
+            meta = {"session_summary": r.summary or ""}
+
+        summary_raw = str(
+            meta.get("session_summary") or meta.get("text") or ""
+        ).strip()
+        # If the LLM emitted structured JSON, prefer its "summary" key.
+        if summary_raw.startswith("{"):
+            try:
+                parsed = _json.loads(summary_raw)
+                summary_raw = str(parsed.get("summary") or summary_raw)
+            except (TypeError, ValueError):
+                pass
+
+        stamp = r.created_at.strftime("%Y-%m-%d") if r.created_at else "recent"
+        task = str(meta.get("task") or "").strip()
+        headline = task[:120] if task else r.title
+        lines.append(f"- ({stamp}) {headline}: {summary_raw[:260]}")
+
+    return "\n".join(lines)
+
+
+async def _fetch_codebase_summary(repo_url: str | None) -> str:
+    """Ask Greptile for a short architectural summary of the project's repo.
+
+    Returns an empty string when Greptile isn't configured, when the repo
+    hasn't been indexed yet, or when the query times out — the Tavus call
+    must not block on this.
+    """
+    if not repo_url:
+        return ""
+    try:
+        from app.services.greptile_service import GreptileService
+
+        # Extract just the repo name from the URL (e.g. "SWEAAS/project-foo" → "project-foo").
+        repo_name = repo_url.rstrip("/").split("/")[-1]
+        if not repo_name:
+            return ""
+
+        svc = GreptileService()
+        result = await asyncio.wait_for(
+            svc.query(
+                repo_name=repo_name,
+                question=(
+                    "In under 250 words, summarise the repository: main tech stack, "
+                    "notable modules, and any recent architectural decisions. Plain prose, no lists."
+                ),
+            ),
+            timeout=8.0,
+        )
+    except Exception:
+        logger.debug("Greptile summary unavailable for repo %s", repo_url, exc_info=True)
+        return ""
+
+    message = str(result.get("message") or "").strip()
+    if not message or message == "Greptile not configured":
+        return ""
+    return message[:1500]
 
 
 async def _fetch_project_by_token(
@@ -389,6 +482,20 @@ async def create_cto_call(
             project_data["agent_activity"] = "\n".join(active_tasks)
         if warnings:
             project_data["budget_warnings"] = "\n".join(warnings)
+
+        # Fetch the last few session summaries and a Greptile codebase blurb
+        # in parallel so the CTO persona can answer "what have the agents
+        # been working on?" and "how is the codebase structured?" from real
+        # project state instead of a generic reply. Both are best-effort —
+        # any failure is swallowed by the helper.
+        recent_summaries, codebase_summary = await asyncio.gather(
+            _fetch_recent_session_summaries(db, request.project_id),
+            _fetch_codebase_summary(project_data.get("github_repo_url")),
+        )
+        if recent_summaries:
+            project_data["recent_sessions"] = recent_summaries
+        if codebase_summary:
+            project_data["codebase_summary"] = codebase_summary
     else:
         # Interview mode — no existing project, just inject fleet context
         project_data = {

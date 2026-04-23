@@ -130,6 +130,9 @@ export const onboardingApi = {
       parent_agent_id?: string | null;
     }>;
     completed?: boolean;
+    // When present, the backend onboards this specific project instead of the
+    // org's default. Drives the "+ New project" → onboarding redirect.
+    project_id?: string;
   }) => api.put("/onboarding/team-config", data),
   patchCtoAssignment: (data: {
     cto_assignment: {
@@ -261,6 +264,8 @@ export interface TavusReconciliationResponse {
 
 export const organizationApi = {
   list: () => api.get("/organizations"),
+  create: (data: { name: string }) => api.post("/organizations", data),
+  switch: (orgId: string) => api.post(`/organizations/${orgId}/switch`),
   update: (orgId: string, data: { name: string }) =>
     api.patch(`/organizations/${orgId}`, data),
 };

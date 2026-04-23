@@ -9,7 +9,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { communicationApi } from "../api/client";
 import { getFeaturedReplicas } from "../components/cto-page/replicaUtils";
 import type { TavusReplica } from "../components/cto-page/types";
@@ -44,6 +44,11 @@ function formatCurrency(value: number) {
 
 export default function OnboardingView() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // When coming from "+ New project" the URL carries ?project_id=<uuid>. The
+  // backend uses it to scope team-config creation to that specific project
+  // instead of the org's default one.
+  const targetProjectId = searchParams.get("project_id");
   const { config, fetchConfig, saveConfig, saving, error } = useTeamOnboardingStore();
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
   const user = useAuthStore((s) => s.user);
@@ -145,24 +150,27 @@ export default function OnboardingView() {
   const previewAssignments = recommendation.assignments.slice(0, 24);
 
   async function handleSave() {
-    const result = await saveConfig({
-      completed: true,
-      company_size: companySize,
-      overall_budget_usd: overallBudgetUsd,
-      department_sizes: departmentSizes,
-      cto_assignment: selectedCtoReplica
-        ? {
-            agent_id: "cto-01",
-            archetype_agent_id: "cto-01",
-            department: "engineering",
-            role: "cto",
-            hierarchy_level: "cto",
-            parent_agent_id: null,
-            ...selectedCtoReplica,
-          }
-        : null,
-      assignments: recommendation.assignments,
-    });
+    const result = await saveConfig(
+      {
+        completed: true,
+        company_size: companySize,
+        overall_budget_usd: overallBudgetUsd,
+        department_sizes: departmentSizes,
+        cto_assignment: selectedCtoReplica
+          ? {
+              agent_id: "cto-01",
+              archetype_agent_id: "cto-01",
+              department: "engineering",
+              role: "cto",
+              hierarchy_level: "cto",
+              parent_agent_id: null,
+              ...selectedCtoReplica,
+            }
+          : null,
+        assignments: recommendation.assignments,
+      },
+      targetProjectId,
+    );
 
     if (result) {
       try {

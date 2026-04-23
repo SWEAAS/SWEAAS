@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
-  Warehouse,
   Settings,
   Users,
   CreditCard,
@@ -14,14 +12,16 @@ import {
   LogOut,
   Video,
 } from "lucide-react";
-import { organizationApi } from "../../api/client";
 import { useAuthStore } from "../../store/authStore";
 import { useNotificationStore } from "../../store/notificationStore";
+import OrgSwitcher from "./OrgSwitcher";
 
 const navItems = [
   { to: "/dashboard",  icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/hq",         icon: Building2,       label: "Visit The Office" },
-  { to: "/welcome-hw", icon: Warehouse,       label: "Welcome to HQ" },
+  // Single HQ entry point — the welcome experience now hosts the campus GLB
+  // exterior and the interactive office interior (seated agents, CTO,
+  // walkthrough camera, agent chat).
+  { to: "/welcome-hw", icon: Building2,       label: "Headquarters" },
   { to: "/agents",     icon: Users,           label: "Agents" },
   { to: "/org-chart",  icon: GitBranch,       label: "Org Chart" },
   { to: "/budget",     icon: CreditCard,      label: "Budget" },
@@ -32,27 +32,9 @@ const navItems = [
   { to: "/settings",   icon: Settings,        label: "Settings" },
 ];
 
-interface Org {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 export default function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
-  const user = useAuthStore((s) => s.user);
   const unreadCount = useNotificationStore((s) => s.unreadCount);
-  const [org, setOrg] = useState<Org | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    organizationApi.list()
-      .then((res) => {
-        const orgs: Org[] = res.data;
-        if (orgs.length > 0) setOrg(orgs[0]);
-      })
-      .catch(() => {});
-  }, [user]);
 
   return (
     <aside
@@ -100,41 +82,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {org && (
-        <div style={{ padding: "0 24px 12px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: "var(--brand-surface)",
-              border: "1px solid var(--brand-border)",
-            }}
-          >
-            <div
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 6,
-                background: "var(--brand)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                {org.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#1f1638", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {org.name}
-            </span>
-          </div>
-        </div>
-      )}
+      <OrgSwitcher />
 
       <div style={{ height: 1, background: "#ece7f5", margin: "0 16px 8px" }} />
 
