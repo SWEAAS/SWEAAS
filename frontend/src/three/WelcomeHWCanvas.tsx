@@ -1,53 +1,63 @@
 /**
- * Canvas wrapper around WelcomeHWScene. Owns the ACES tone mapping, DPR,
- * and shadow settings so the inner scene stays purely declarative.
+ * Canvas wrapper around WelcomeHWScene. Owns ACES tone mapping, DPR, and
+ * shadow settings so the inner scene stays purely declarative.
+ *
+ * On mount the camera is positioned for a wide interior overview; the
+ * CameraStepper then transitions it to the first room stop. Both modes —
+ * Stepper and Overview — use the same CameraControls instance in the scene,
+ * so no camera swap happens when the parent toggles mode.
  */
 import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import WelcomeHWScene from "./WelcomeHWScene";
 import type { Agent } from "../store/agentStore";
+import type { DeskAssignment, Stop } from "./tourStops";
 
 interface WelcomeHWCanvasProps {
   agents?: Agent[];
+  assignments: DeskAssignment[];
+  stops: Stop[];
+  stopIndex: number;
+  stepperActive: boolean;
   onAgentClick?: (agent: Agent) => void;
-  cameraMode?: "overview" | "walkthrough";
-  autoRotate?: boolean;
 }
 
-export default function WelcomeHWCanvas({
-  agents,
-  onAgentClick,
-  cameraMode = "overview",
-  autoRotate = false,
-}: WelcomeHWCanvasProps) {
-  // Walkthrough drops the user just inside the HQ at eye height; overview
-  // sits above the campus so the U-shape, trees, and surrounding paths are
-  // all in frame. The previous overview preset (y=135, target z=40) pointed
-  // the camera past the building and produced a near-blank sky render —
-  // this version frames the main building at a sensible distance.
-  const cameraPosition: [number, number, number] =
-    cameraMode === "walkthrough" ? [0, 1.7, 25] : [0, 55, 130];
-  const cameraFov = cameraMode === "walkthrough" ? 70 : 50;
+// Stable references — moving these out of render avoids triggering Canvas
+// remounts whenever the parent re-renders (Canvas treats `gl`, `camera`,
+// `shadows` as identity-stable and re-runs the renderer setup on change).
+const CAMERA_INIT = { position: [38, 28, 38] as [number, number, number], fov: 42 };
+const GL_INIT = {
+  antialias: true,
+  alpha: false,
+  powerPreference: "high-performance" as const,
+  toneMapping: THREE.ACESFilmicToneMapping,
+  toneMappingExposure: 1.05,
+};
+const SHADOW_INIT = { type: THREE.PCFSoftShadowMap };
+const DPR_RANGE: [number, number] = [1, 1.75];
+const CANVAS_STYLE = { background: "#c8e0f0" };
 
+export default function WelcomeHWCanvas({
+  assignments,
+  stops,
+  stopIndex,
+  stepperActive,
+  onAgentClick,
+}: WelcomeHWCanvasProps) {
   return (
     <Canvas
-      dpr={[1, 1.75]}
-      camera={{ position: cameraPosition, fov: cameraFov }}
-      gl={{
-        antialias: true,
-        alpha: false,
-        powerPreference: "high-performance",
-        toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.0,
-      }}
-      shadows={{ type: THREE.PCFSoftShadowMap }}
-      style={{ background: "#c8e0f0" }}
+      dpr={DPR_RANGE}
+      camera={CAMERA_INIT}
+      gl={GL_INIT}
+      shadows={SHADOW_INIT}
+      style={CANVAS_STYLE}
     >
       <WelcomeHWScene
-        agents={agents}
+        assignments={assignments}
+        stops={stops}
+        stopIndex={stopIndex}
+        stepperActive={stepperActive}
         onAgentClick={onAgentClick}
-        cameraMode={cameraMode}
-        autoRotate={autoRotate}
       />
     </Canvas>
   );

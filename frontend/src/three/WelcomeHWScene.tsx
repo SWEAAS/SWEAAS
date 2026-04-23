@@ -1,34 +1,30 @@
 /**
- * Campus exterior scene — the GLB-backed U-shaped office park with trees,
- * walking paths, and grass patches that lives at the "Campus" mode of the
- * unified /welcome-hw view.
+ * HQ interior scene — the Blender EEVEE building with real seated workers
+ * at each desk, driven by the camera stepper.
  *
- * Extracted from the original WelcomeHWView so the outer view can swap
- * between this scene and the interactive office interior (HQScene) via
- * a single Canvas swap.
- *
- * Ships ONE GLB (`Building7Cycles.glb`) — the dev-facing Cycles/EEVEE
- * comparison toggle was removed because it shipped a 36 MB asset pair and
- * a tech-demo feeling to real users. See BUILDING_PATH below to change.
+ * The previous version tiled 5 building copies in a U-shape and placed
+ * agents as glowing pins on a lobby disc. That was a holdover from when
+ * the HQ was a procedural campus exterior. Now the user is INSIDE the one
+ * main building, walking the camera room to room — so the tiling is just
+ * extra draw calls and the pins are gone.
  */
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useMemo } from "react";
 import * as THREE from "three";
 import {
   ContactShadows,
   Environment,
   Html,
   Lightformer,
-  OrbitControls,
   Sky,
   useGLTF,
   useProgress,
 } from "@react-three/drei";
-import ExplorationControls from "./controls/ExplorationControls";
+import AgentAvatar from "./AgentAvatar";
+import CameraStepper from "./CameraStepper";
+import GroundScenery from "./GroundScenery";
 import type { Agent } from "../store/agentStore";
+import { ROOMS, type DeskAssignment, type Stop } from "./tourStops";
 
-// Single production GLB — the EEVEE export from Blender is the canonical
-// SWEAAS headquarters model. The Cycles sibling (Building7Cycles.glb) is
-// kept in public/models/ for the Blender pipeline but is not user-facing.
 export const BUILDING_PATH = "/models/Building7EEVEE.glb";
 
 function Loader() {
@@ -37,13 +33,13 @@ function Loader() {
     <Html center>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, color: "#1B47D6", fontFamily: "inherit" }}>
         <div style={{ width: 48, height: 48, border: "3px solid #e2e8f0", borderTopColor: "#1B47D6", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Loading campus… {progress.toFixed(0)}%</p>
+        <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Loading headquarters… {progress.toFixed(0)}%</p>
       </div>
     </Html>
   );
 }
 
-// ─── Procedural texture generators ──────────────────────────────────────────
+// ─── Procedural textures (retained from prior version) ─────────────────────
 
 const texCache = new Map<string, THREE.DataTexture>();
 
@@ -129,7 +125,7 @@ function makeStippleNormal(key: string, size: number, intensity: number): THREE.
   texCache.set(key, tex); return tex;
 }
 
-// ─── Material palette ───────────────────────────────────────────────────────
+// ─── Material palette (EEVEE-matched Blender material names) ───────────────
 
 interface MatDef {
   color: string; metalness: number; roughness: number;
@@ -174,146 +170,7 @@ const matByName = new Map<string, THREE.MeshStandardMaterial>();
 for (const [n, d] of Object.entries(defs)) matByName.set(n, makeMat(d, n));
 const fallbackMat = makeMat({ color: "#404045", metalness: 0.5, roughness: 0.6 }, "__fallback");
 
-// Processed-scene marker — WeakSet avoids mutating the useGLTF-returned
-// object with a string key, which React Compiler's immutability rule flags.
 const processedScenes = new WeakSet<THREE.Object3D>();
-
-// ─── Procedural trees, grass, paths ─────────────────────────────────────────
-
-const TRUNK_MAT = new THREE.MeshStandardMaterial({ color: "#5c3a1e", roughness: 0.9, metalness: 0 });
-const CANOPY_MATS = [
-  new THREE.MeshStandardMaterial({ color: "#3d7a2a", roughness: 0.85, metalness: 0 }),
-  new THREE.MeshStandardMaterial({ color: "#4a8c35", roughness: 0.85, metalness: 0 }),
-  new THREE.MeshStandardMaterial({ color: "#2e6b20", roughness: 0.85, metalness: 0 }),
-  new THREE.MeshStandardMaterial({ color: "#55943e", roughness: 0.85, metalness: 0 }),
-  new THREE.MeshStandardMaterial({ color: "#3a7030", roughness: 0.85, metalness: 0 }),
-];
-
-const TRUNK_GEO = new THREE.CylinderGeometry(0.12, 0.18, 1, 6);
-const CANOPY_GEOS = [
-  new THREE.SphereGeometry(1, 8, 6),
-  new THREE.DodecahedronGeometry(1, 0),
-  new THREE.IcosahedronGeometry(1, 0),
-];
-
-function seededRandom(seed: number): () => number {
-  let s = seed;
-  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
-}
-
-interface TreeData { x: number; z: number; trunkH: number; canopyR: number; canopyGeo: number; canopyMat: number; canopyY: number; }
-
-const BUILDING_LAYOUT: [number, number][] = [
-  [0, 0],
-  [-135, 0],
-  [135, 0],
-  [-135, 115],
-  [135, 115],
-];
-
-function insideAnyBuilding(x: number, z: number): boolean {
-  const halfW = 42;
-  const halfD = 30;
-  return BUILDING_LAYOUT.some(
-    ([cx, cz]) => Math.abs(x - cx) < halfW && Math.abs(z - cz) < halfD,
-  );
-}
-
-function generateTreePositions(): TreeData[] {
-  const rng = seededRandom(42);
-  const trees: TreeData[] = [];
-  const minDist = 3.5;
-  const tooClose = (x: number, z: number) =>
-    trees.some((t) => (t.x - x) ** 2 + (t.z - z) ** 2 < minDist * minDist);
-  const tryAdd = (x: number, z: number, trunkH: number, canopyR: number) => {
-    if (tooClose(x, z)) return;
-    if (insideAnyBuilding(x, z)) return;
-    trees.push({
-      x, z, trunkH, canopyR,
-      canopyGeo: Math.floor(rng() * CANOPY_GEOS.length),
-      canopyMat: Math.floor(rng() * CANOPY_MATS.length),
-      canopyY: 0,
-    });
-  };
-  for (const [cx, cz] of BUILDING_LAYOUT) {
-    for (let angle = 0; angle < Math.PI * 2; angle += 0.12) {
-      const radius = 48 + rng() * 14;
-      const x = cx + Math.cos(angle) * radius + (rng() - 0.5) * 3;
-      const z = cz + Math.sin(angle) * radius + (rng() - 0.5) * 3;
-      tryAdd(x, z, 1.8 + rng() * 1.5, 1.5 + rng() * 1.2);
-    }
-  }
-  for (let i = 0; i < 220; i++) {
-    const x = (rng() - 0.5) * 350;
-    const z = (rng() - 0.5) * 350;
-    tryAdd(x, z, 1.5 + rng() * 2.0, 1.2 + rng() * 1.8);
-  }
-  for (const t of trees) t.canopyY = t.trunkH * 0.8;
-  return trees;
-}
-
-const TREE_DATA = generateTreePositions();
-
-function Trees() {
-  return (
-    <group>
-      {TREE_DATA.map((t, i) => (
-        <group key={i} position={[t.x, 0, t.z]}>
-          <mesh geometry={TRUNK_GEO} material={TRUNK_MAT} position={[0, t.trunkH / 2, 0]} scale={[1, t.trunkH, 1]} castShadow />
-          <mesh geometry={CANOPY_GEOS[t.canopyGeo]} material={CANOPY_MATS[t.canopyMat]} position={[0, t.trunkH + t.canopyR * 0.6, 0]} scale={[t.canopyR, t.canopyR * 0.85, t.canopyR]} castShadow />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-function GrassPatches() {
-  const rng = seededRandom(99);
-  const patches: { x: number; z: number; r: number; shade: string }[] = [];
-  const shades = ["#4a8c35", "#3d7a2a", "#5a9a44", "#3a7030", "#4e9038"];
-  for (let i = 0; i < 150; i++) {
-    const x = (rng() - 0.5) * 400;
-    const z = (rng() - 0.5) * 400;
-    if (insideAnyBuilding(x, z)) continue;
-    patches.push({ x, z, r: 2 + rng() * 6, shade: shades[Math.floor(rng() * shades.length)] });
-  }
-  return (
-    <group>
-      {patches.map((p, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, rng() * Math.PI]} position={[p.x, 0.01, p.z]} receiveShadow>
-          <circleGeometry args={[p.r, 12]} />
-          <meshStandardMaterial color={p.shade} roughness={0.95} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function WalkingPaths() {
-  const pathMat = new THREE.MeshStandardMaterial({ color: "#d4cfc6", roughness: 0.8, metalness: 0 });
-  const paths: { x: number; z: number; w: number; h: number; rot: number }[] = [];
-  paths.push({ x: 0, z: 0, w: 3.5, h: 220, rot: Math.PI / 2 });
-  paths.push({ x: -135, z: 58, w: 3.5, h: 140, rot: 0 });
-  paths.push({ x: 135, z: 58, w: 3.5, h: 140, rot: 0 });
-  paths.push({ x: 0, z: 120, w: 18, h: 3.5, rot: 0 });
-  for (const [cx, cz] of BUILDING_LAYOUT) {
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * Math.PI * 2;
-      const r = 34;
-      paths.push({ x: cx + Math.cos(a) * r, z: cz + Math.sin(a) * r, w: 2.2, h: 7, rot: -a });
-    }
-  }
-  return (
-    <group>
-      {paths.map((p, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, p.rot]} position={[p.x, 0.02, p.z]} receiveShadow>
-          <planeGeometry args={[p.w, p.h]} />
-          <primitive object={pathMat} attach="material" />
-        </mesh>
-      ))}
-    </group>
-  );
-}
 
 function applyMaterials(scene: THREE.Object3D) {
   scene.traverse((child) => {
@@ -334,13 +191,7 @@ function applyMaterials(scene: THREE.Object3D) {
 
 function BuildingModel() {
   const gltf = useGLTF(BUILDING_PATH);
-  const groupRef = useRef<THREE.Group>(null);
-
-  // Derive the extra U-shape copies once per gltf change. Using useMemo
-  // (instead of useEffect + setState) avoids the set-state-in-effect
-  // cascade and keeps the mutation of the gltf scene contained to this
-  // single memo body.
-  const copies = useMemo(() => {
+  useMemo(() => {
     const scene = gltf.scene;
     if (!processedScenes.has(scene)) {
       applyMaterials(scene);
@@ -349,197 +200,65 @@ function BuildingModel() {
       scene.position.sub(center);
       processedScenes.add(scene);
     }
-    const clones: THREE.Object3D[] = [];
-    for (const [cx, cz] of BUILDING_LAYOUT) {
-      if (cx === 0 && cz === 0) continue;
-      const clone = scene.clone(true);
-      applyMaterials(clone);
-      clone.position.set(cx + scene.position.x, scene.position.y, cz + scene.position.z);
-      clones.push(clone);
-    }
-    return clones;
   }, [gltf]);
-
-  return (
-    <group ref={groupRef}>
-      <primitive object={gltf.scene} />
-      {copies.map((c, i) => (
-        <primitive key={i} object={c} />
-      ))}
-    </group>
-  );
+  return <primitive object={gltf.scene} />;
 }
 
-// ─── Agent markers ──────────────────────────────────────────────────────────
-//
-// Agents live visually *inside* the main HQ building. Each agent is a small
-// emissive pin with a floating name card. Clicking the pin opens the shared
-// AgentChatPanel. The CTO gets a prominent spot slightly raised (exec
-// floor); the rest fan out in a grid on the ground floor within the
-// building's interior footprint (see `insideAnyBuilding` halfW=42, halfD=30).
-//
-// The pins use drei's `<Html>` for labels + an emissive sphere/cone for the
-// 3D marker itself, so they're visible from any camera angle and survive
-// the Blender material remap.
+// ─── Room floor + ceiling lights (gives interior its own lighting) ─────────
 
-const DEPT_COLORS: Record<string, string> = {
-  engineering: "#1B47D6",
-  product: "#2ea06b",
-  marketing: "#D97706",
-  support: "#9233ea",
-};
-
-// Interior anchor for the agent roster — inside the center building of the
-// U-shape layout. Tuned so the pins don't clip through walls / the floor
-// of the Blender model.
-const AGENT_MARKER_BASE: [number, number, number] = [0, 1.4, 0];
-const AGENT_MARKER_SPACING = 3.2;
-// Max half-extent of the center building's interior (matches
-// `insideAnyBuilding` halfW/halfD) so the grid never spills outside.
-const INTERIOR_HALF_W = 34;
-const INTERIOR_HALF_D = 22;
-
-function markerColor(agent: Agent): string {
-  return DEPT_COLORS[agent.department] ?? "#1B47D6";
-}
-
-function AgentMarker({
-  agent,
-  position,
-  onClick,
-  isCto,
-}: {
-  agent: Agent;
-  position: [number, number, number];
-  onClick: (agent: Agent) => void;
-  isCto: boolean;
-}) {
-  const color = markerColor(agent);
-  const size = isCto ? 1.3 : 0.95;
-
+function RoomAmbientLights() {
+  // One soft overhead spot per room. Positions are the room bounds centers
+  // lifted to ceiling height. Keeps characters readable even if the GLB
+  // building has no interior lights.
   return (
-    <group position={position}>
-      <mesh
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick(agent);
-        }}
-        onPointerOver={(e) => {
-          (e.object as THREE.Mesh & { cursor?: string }).cursor = "pointer";
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = "auto";
-        }}
-        castShadow
-      >
-        <sphereGeometry args={[size, 24, 20]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={isCto ? 0.55 : 0.35}
-          metalness={0.15}
-          roughness={0.35}
-        />
-      </mesh>
-      {/* Cone pointing down so the marker reads as a "pin" */}
-      <mesh position={[0, -size * 0.75, 0]} rotation={[Math.PI, 0, 0]}>
-        <coneGeometry args={[size * 0.35, size * 0.7, 16]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} />
-      </mesh>
-      <Html
-        center
-        distanceFactor={28}
-        position={[0, size + 1.6, 0]}
-        zIndexRange={[30, 0]}
-        occlude={false}
-        pointerEvents="none"
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 2,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.95)",
-            border: `1px solid ${color}`,
-            boxShadow: "0 4px 14px rgba(12,21,38,0.18)",
-            color: "#1f1638",
-            fontFamily: "inherit",
-            whiteSpace: "nowrap",
-            userSelect: "none",
-          }}
-        >
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em" }}>
-            {agent.name}
-          </span>
-          <span style={{ fontSize: 9, fontWeight: 600, color: color, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            {isCto ? "CTO" : agent.role.replace(/_/g, " ")}
-          </span>
-        </div>
-      </Html>
-    </group>
-  );
-}
-
-function AgentMarkers({
-  agents,
-  onAgentClick,
-}: {
-  agents: Agent[];
-  onAgentClick: (agent: Agent) => void;
-}) {
-  const { cto, rest } = useMemo(() => {
-    const cto = agents.find((a) => a.role === "cto" || a.hierarchy_level === "cto") ?? null;
-    const rest = cto ? agents.filter((a) => a.agent_id !== cto.agent_id) : agents;
-    return { cto, rest };
-  }, [agents]);
-
-  if (agents.length === 0) return null;
-
-  // Grid arrangement inside the main building's interior footprint. Columns
-  // scale with agent count so 4-agent and 40-agent teams both fit; grid is
-  // clamped to the interior half-extents so no pin spills out a wall.
-  const cols = Math.max(3, Math.ceil(Math.sqrt(rest.length)));
-  const rows = Math.max(1, Math.ceil(rest.length / cols));
-  const spacingX = Math.min(AGENT_MARKER_SPACING, (INTERIOR_HALF_W * 1.6) / Math.max(cols, 1));
-  const spacingZ = Math.min(AGENT_MARKER_SPACING, (INTERIOR_HALF_D * 1.4) / Math.max(rows, 1));
-
-  return (
-    <group position={AGENT_MARKER_BASE}>
-      {/* CTO sits at the head of the interior, slightly raised like an
-          exec desk at the front of the room. */}
-      {cto && (
-        <AgentMarker
-          agent={cto}
-          position={[0, 1.6, -INTERIOR_HALF_D * 0.55]}
-          onClick={onAgentClick}
-          isCto
-        />
-      )}
-      {rest.map((agent, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = (col - (cols - 1) / 2) * spacingX;
-        const z = (row - (rows - 1) / 2) * spacingZ + INTERIOR_HALF_D * 0.12;
+    <group>
+      {Object.values(ROOMS).map((room) => {
+        const cx = (room.bounds.min[0] + room.bounds.max[0]) / 2;
+        const cz = (room.bounds.min[2] + room.bounds.max[2]) / 2;
         return (
-          <AgentMarker
-            key={agent.agent_id}
-            agent={agent}
-            position={[x, 0.8, z]}
-            onClick={onAgentClick}
-            isCto={false}
+          <pointLight
+            key={room.id}
+            position={[cx, 3.6, cz]}
+            intensity={18}
+            distance={18}
+            decay={1.4}
+            color="#fff2d8"
+            castShadow={false}
           />
         );
       })}
-      {/* Soft lobby-floor disc under the grid so the pins feel grounded on a
-          real surface, not floating inside the model. */}
-      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[Math.min(INTERIOR_HALF_W, INTERIOR_HALF_D) - 1, 48]} />
-        <meshStandardMaterial color="#dcd6e4" roughness={0.9} transparent opacity={0.55} />
-      </mesh>
+    </group>
+  );
+}
+
+// ─── Workers — one AgentAvatar per desk assignment ─────────────────────────
+
+interface WorkersProps {
+  assignments: DeskAssignment[];
+  highlightedAgentId: string | null;
+  highlightedRoomId: string | null;
+  onAgentClick: (agent: Agent) => void;
+}
+
+function Workers({ assignments, highlightedAgentId, highlightedRoomId, onAgentClick }: WorkersProps) {
+  return (
+    <group>
+      {assignments.map(({ agent, anchor, isHeroCTO }) => {
+        const isHighlighted =
+          agent.agent_id === highlightedAgentId ||
+          (highlightedAgentId === null && anchor.room === highlightedRoomId);
+        return (
+          <AgentAvatar
+            key={agent.agent_id}
+            agent={agent}
+            position={anchor.position}
+            rotationY={anchor.rotationY}
+            isHeroCTO={isHeroCTO}
+            highlighted={isHighlighted}
+            onClick={() => onAgentClick(agent)}
+          />
+        );
+      })}
     </group>
   );
 }
@@ -547,103 +266,90 @@ function AgentMarkers({
 // ─── Scene ─────────────────────────────────────────────────────────────────
 
 interface WelcomeHWSceneProps {
-  /** Agent roster — rendered as clickable pins on the plaza in front of HQ. */
   agents?: Agent[];
-  /** Fired when a marker is clicked. The parent opens AgentChatPanel. */
+  assignments: DeskAssignment[];
+  stops: Stop[];
+  stopIndex: number;
+  stepperActive: boolean;
   onAgentClick?: (agent: Agent) => void;
-  /** Camera behaviour. Walkthrough uses pointer-lock + WASD. */
-  cameraMode?: "overview" | "walkthrough";
-  /** Enables OrbitControls auto-rotate for the scripted Tour mode. */
-  autoRotate?: boolean;
 }
 
-/**
- * The canonical SWEAAS headquarters scene — Blender EEVEE campus GLB, trees,
- * paths, plaza, and (when agents are supplied) clickable agent pins.
- *
- * Rendered inside the parent view's `<Canvas>` so camera/Canvas config stays
- * consistent across mode switches without remounting WebGL.
- */
 export default function WelcomeHWScene({
-  agents = [],
+  assignments,
+  stops,
+  stopIndex,
+  stepperActive,
   onAgentClick,
-  cameraMode = "overview",
-  autoRotate = false,
 }: WelcomeHWSceneProps) {
-  // Walkthrough drops the user just inside the main HQ at eye height.
-  const walkthroughStart: [number, number, number] = [0, 1.7, 25];
+  const currentStop = stops[stopIndex] ?? null;
+  const highlightedAgentId = currentStop?.kind === "person" ? currentStop.agentId : null;
+  const highlightedRoomId = currentStop?.roomId ?? null;
 
   return (
     <>
-      {/* Sky renders instantly — no remote assets, no Suspense needed. */}
       <Sky sunPosition={[80, 45, 60]} turbidity={4} rayleigh={0.5} mieCoefficient={0.005} mieDirectionalG={0.8} />
 
-      {/* The HDRI env preset loads from a remote URL and will suspend until
-          ready. Wrap in its own Suspense with a null fallback so the rest of
-          the scene (ground, trees, paths, agents) paints immediately without
-          waiting for the environment to download. */}
       <Suspense fallback={null}>
-        <Environment preset="park" resolution={256}>
+        <Environment preset="city" resolution={256}>
           <Lightformer intensity={2.2} color="#fff3d4" position={[18, 18, 10]} rotation={[0, Math.PI / 3, 0]} scale={[20, 20, 1]} />
           <Lightformer intensity={1.0} color="#c7e4ff" position={[-16, 10, -12]} rotation={[0, -Math.PI / 4, 0]} scale={[14, 10, 1]} />
           <Lightformer intensity={0.6} color="#ffe8b0" position={[0, 30, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[40, 40, 1]} />
         </Environment>
       </Suspense>
 
-      <ambientLight intensity={0.6} color="#fff8e8" />
-      <hemisphereLight args={["#87ceeb", "#4a8c35", 0.7]} position={[0, 40, 0]} />
-      <directionalLight position={[60, 80, 50]} intensity={2.5} color="#fff4d6" castShadow shadow-bias={-0.0001} shadow-normalBias={0.03} shadow-mapSize={[2048, 2048]} shadow-camera-far={380} shadow-camera-left={-220} shadow-camera-right={220} shadow-camera-top={220} shadow-camera-bottom={-220} />
-      <directionalLight position={[-20, 25, -15]} intensity={0.4} color="#b8dcff" />
+      <ambientLight intensity={0.9} color="#fff8e8" />
+      <hemisphereLight args={["#d8e8ff", "#f0e6d0", 0.6]} position={[0, 40, 0]} />
+      <directionalLight
+        position={[60, 80, 50]}
+        intensity={2.0}
+        color="#fff4d6"
+        castShadow
+        shadow-bias={-0.0001}
+        shadow-normalBias={0.03}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-far={380}
+        shadow-camera-left={-120}
+        shadow-camera-right={120}
+        shadow-camera-top={120}
+        shadow-camera-bottom={-120}
+      />
+      <directionalLight position={[-20, 25, -15]} intensity={0.35} color="#b8dcff" />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[600, 600]} />
-        <meshStandardMaterial color="#5a9a3e" roughness={0.92} />
+      <RoomAmbientLights />
+
+      {/* Ground — a large warm-grey plane to act as the base earth color
+          underneath the grass patches and outside the campus footprint. The
+          plane is unshaded slightly below the building so we can layer
+          grass + paths on top without z-fighting. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+        <planeGeometry args={[500, 500]} />
+        <meshStandardMaterial color="#a89b80" roughness={1} />
       </mesh>
 
-      <GrassPatches />
-      <WalkingPaths />
-      <Trees />
+      {/* Trees, grass, paths — strictly outside the building footprint. */}
+      <GroundScenery />
 
-      <ContactShadows position={[0, 0.02, 40]} scale={120} blur={2.5} opacity={0.12} far={28} resolution={512} color="#4f6f2f" />
+      <ContactShadows position={[0, 0.03, 0]} scale={90} blur={2.2} opacity={0.4} far={22} resolution={1024} color="#2b2322" />
 
-      {/* GLB building is isolated in its own Suspense so the rest of the
-          scene (trees/ground/agents) is visible while the ~18MB EEVEE model
-          downloads on first visit. */}
       <Suspense fallback={<Loader />}>
         <BuildingModel />
       </Suspense>
 
-      {/* Agent pins live inside the main building. Rendered outside the
-          BuildingModel Suspense so they appear immediately even before the
-          GLB finishes streaming in. */}
-      {onAgentClick && agents.length > 0 && (
-        <AgentMarkers agents={agents} onAgentClick={onAgentClick} />
-      )}
+      <Workers
+        assignments={assignments}
+        highlightedAgentId={highlightedAgentId}
+        highlightedRoomId={highlightedRoomId}
+        onAgentClick={(agent) => onAgentClick?.(agent)}
+      />
 
-      {cameraMode === "walkthrough" ? (
-        <ExplorationControls
-          mode="walkthrough"
-          walkthroughStart={walkthroughStart}
-          minY={1.5}
-          maxY={45}
-        />
-      ) : (
-        <OrbitControls
-          target={[0, 2, 0]}
-          enablePan
-          enableZoom
-          enableRotate
-          maxPolarAngle={Math.PI / 2.05}
-          minDistance={25}
-          maxDistance={420}
-          autoRotate={autoRotate}
-          autoRotateSpeed={0.35}
-        />
-      )}
+      <CameraStepper
+        stops={stops}
+        currentIndex={stopIndex}
+        assignments={assignments}
+        active={stepperActive}
+      />
     </>
   );
 }
 
-// Preload the HQ GLB once at module load so the first render doesn't block
-// on a ~18 MB download.
 useGLTF.preload(BUILDING_PATH);
