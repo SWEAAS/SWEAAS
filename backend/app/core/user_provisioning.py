@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.middleware.auth import AuthenticatedUser
 from app.core.config import get_settings
-from app.models.user import Organization, User
+from app.models.user import Organization, OrganizationMember, User
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,15 @@ async def ensure_db_user(
         role="owner",
     )
     db.add(db_user)
+    # Record the caller as an owner of their default org so it shows up in
+    # ``GET /organizations`` and they can switch back after creating more.
+    db.add(
+        OrganizationMember(
+            user_id=db_user.id,
+            organization_id=org.id,
+            role="owner",
+        )
+    )
 
     try:
         await db.commit()

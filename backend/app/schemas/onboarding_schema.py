@@ -79,6 +79,10 @@ class TeamOnboardingConfigRequest(BaseModel):
     cto_assignment: TeamPersonaAssignment | None = None
     assignments: list[TeamPersonaAssignment] = Field(default_factory=list, max_length=MAX_TEAM_ASSIGNMENTS)
     completed: bool = True
+    # When present, onboard this specific project instead of picking the org's
+    # first project. Used by the "New project" flow so each project can have
+    # its own team — just like running `git init` in a new repo.
+    project_id: str | None = Field(default=None, max_length=64)
 
 
 class TeamOnboardingConfigResponse(BaseModel):

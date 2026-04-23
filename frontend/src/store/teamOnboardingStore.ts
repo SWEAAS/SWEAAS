@@ -33,11 +33,14 @@ export interface TeamOnboardingConfig {
   updated_at: string | null;
 }
 
+// Zero defaults — real distributions come from the onboarding view after
+// the user picks a company size. Non-zero defaults would render as fake data
+// on fresh loads.
 export const DEFAULT_DEPARTMENT_SIZES: DepartmentSizes = {
-  engineering: 22,
-  marketing: 9,
-  product: 9,
-  support: 9,
+  engineering: 0,
+  marketing: 0,
+  product: 0,
+  support: 0,
 };
 
 export const DEFAULT_TEAM_ONBOARDING_CONFIG: TeamOnboardingConfig = {
@@ -58,6 +61,7 @@ interface TeamOnboardingState {
   fetchConfig: () => Promise<void>;
   saveConfig: (
     nextConfig: Omit<TeamOnboardingConfig, "updated_at"> & { updated_at?: string | null },
+    projectId?: string | null,
   ) => Promise<TeamOnboardingConfig | null>;
   patchCtoAssignment: (assignment: TeamPersonaAssignment | null) => Promise<void>;
 }
@@ -78,7 +82,7 @@ export const useTeamOnboardingStore = create<TeamOnboardingState>((set) => ({
     }
   },
 
-  saveConfig: async (nextConfig) => {
+  saveConfig: async (nextConfig, projectId) => {
     set({ saving: true, error: null });
     try {
       const response = await onboardingApi.saveTeamConfig({
@@ -88,6 +92,7 @@ export const useTeamOnboardingStore = create<TeamOnboardingState>((set) => ({
         cto_assignment: nextConfig.cto_assignment,
         assignments: nextConfig.assignments,
         completed: nextConfig.completed,
+        ...(projectId ? { project_id: projectId } : {}),
       });
       set({ config: response.data, saving: false });
       return response.data;

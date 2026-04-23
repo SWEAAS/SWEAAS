@@ -235,7 +235,30 @@ async def save_team_config(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     org_uuid = UUID(org_id)
-    project = await _ensure_default_project(org_uuid, request.overall_budget_usd, db)
+    if request.project_id:
+        # Target a specific project — used by the "New project" flow so each
+        # project keeps its own team roster. Verify ownership before touching
+        # agent rows so a malicious payload can't overwrite another org's team.
+        try:
+            project_uuid = UUID(request.project_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid project_id.") from exc
+        project_stmt = select(Project).where(
+            Project.id == project_uuid,
+            Project.organization_id == org_uuid,
+        )
+        project = (await db.execute(project_stmt)).scalar_one_or_none()
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found in this organization.")
+        # Keep the per-project budget in sync with what the user picked.
+        cfg_stmt = select(ProjectConfig).where(ProjectConfig.project_id == project.id)
+        cfg = (await db.execute(cfg_stmt)).scalar_one_or_none()
+        if cfg is None:
+            db.add(ProjectConfig(project_id=project.id, monthly_budget_usd=request.overall_budget_usd))
+        else:
+            cfg.monthly_budget_usd = request.overall_budget_usd
+    else:
+        project = await _ensure_default_project(org_uuid, request.overall_budget_usd, db)
     await _persist_agents(project.id, request.cto_assignment, request.assignments, db)
 
     stmt = select(User).where(User.supabase_uid == user.uid)

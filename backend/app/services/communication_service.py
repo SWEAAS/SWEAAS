@@ -109,6 +109,18 @@ def _build_internal_call_context(
         parts.append(f"\nLive agent activity right now:\n{project['agent_activity']}")
     if project.get("budget_warnings"):
         parts.append(f"\nBudget warnings:\n{project['budget_warnings']}")
+    if project.get("recent_sessions"):
+        parts.append(
+            "\nRecent orchestration sessions (use these for specific "
+            "answers about what the team has shipped):\n"
+            f"{project['recent_sessions']}"
+        )
+    if project.get("codebase_summary"):
+        parts.append(
+            "\nCodebase overview (from semantic index — reference this when "
+            "the user asks about architecture, modules, or technical choices):\n"
+            f"{project['codebase_summary']}"
+        )
     return "\n".join(parts)
 
 
