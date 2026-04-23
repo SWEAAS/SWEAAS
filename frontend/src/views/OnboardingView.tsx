@@ -28,6 +28,13 @@ import {
 
 type Step = "company" | "departments" | "cto" | "review";
 
+// Sensible starting values for a brand-new workspace: a CTO plus one
+// representative from each of the four departments. These are visible
+// suggestions, not imputed user data — the form always waits for the user
+// to move on to the next step before saving.
+const INITIAL_COMPANY_SIZE = 7;
+const INITIAL_BUDGET_USD = 500;
+
 const inputClass =
   "w-full rounded-[12px] border border-[#ece7f5] bg-[#f8f6fc] px-4 py-3 text-[14px] text-[#1f1638] font-[inherit] outline-none transition-colors focus:border-[var(--brand-border)] focus:bg-white";
 
@@ -44,9 +51,14 @@ export default function OnboardingView() {
   const [replicas, setReplicas] = useState<TavusReplica[]>([]);
   const [replicasLoading, setReplicasLoading] = useState(false);
   const [replicasError, setReplicasError] = useState<string | null>(null);
-  const [companySize, setCompanySize] = useState(50);
-  const [overallBudgetUsd, setOverallBudgetUsd] = useState(6000);
-  const [departmentSizes, setDepartmentSizes] = useState(buildDepartmentSizesForCompanySize(50));
+  // Minimum-viable starting values so a first-time user is editing a real
+  // proposal instead of anchoring on presumptuous pre-filled numbers. The
+  // existing config (if any) replaces these in the effect below.
+  const [companySize, setCompanySize] = useState(INITIAL_COMPANY_SIZE);
+  const [overallBudgetUsd, setOverallBudgetUsd] = useState(INITIAL_BUDGET_USD);
+  const [departmentSizes, setDepartmentSizes] = useState(
+    buildDepartmentSizesForCompanySize(INITIAL_COMPANY_SIZE),
+  );
   const [selectedCtoReplicaId, setSelectedCtoReplicaId] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [budgetAlertThreshold, setBudgetAlertThreshold] = useState(85);
@@ -77,14 +89,15 @@ export default function OnboardingView() {
   }, [fetchConfig]);
 
   useEffect(() => {
-    setCompanySize(config.company_size || 50);
-    setOverallBudgetUsd(config.overall_budget_usd || 6000);
+    const size = config.company_size || INITIAL_COMPANY_SIZE;
+    setCompanySize(size);
+    setOverallBudgetUsd(config.overall_budget_usd || INITIAL_BUDGET_USD);
     setDepartmentSizes(
       normalizeDepartmentSizesForCompanySize(
-        config.company_size || 50,
+        size,
         config.assignments.length > 0
           ? getDepartmentSizesWithFallback(config.department_sizes)
-          : buildDepartmentSizesForCompanySize(config.company_size || 50),
+          : buildDepartmentSizesForCompanySize(size),
       ),
     );
     setSelectedCtoReplicaId(config.cto_assignment?.replica_id ?? null);

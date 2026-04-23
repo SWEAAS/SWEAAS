@@ -47,11 +47,15 @@ export const DEPARTMENT_ROLE_TEMPLATES: Record<DepartmentKey, RoleTemplate[]> = 
   ],
 } as const;
 
+// Zero defaults: when a caller has nothing to fall back to, we surface "no
+// data yet" (zeros) rather than imputing a fake 50-person org. The main
+// producer of real distributions is `buildDepartmentSizesForCompanySize`,
+// which derives sizes from the user's configured company size.
 const DEFAULT_DEPARTMENT_SIZES: DepartmentSizes = {
-  engineering: 22,
-  marketing: 9,
-  product: 9,
-  support: 9,
+  engineering: 0,
+  marketing: 0,
+  product: 0,
+  support: 0,
 };
 
 const WORK_HINTS = ["office", "business", "professional", "v2", "bright", "warm"];

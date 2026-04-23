@@ -245,6 +245,23 @@ class ReplicaCatalogService:
             **get_payload,
         }
 
+    async def sync_live_to_db(self, db: AsyncSession) -> int:
+        """Fetch live Tavus replicas and upsert them into ``replica_profiles``.
+
+        Returns the number of live replicas persisted. Used by the first-touch
+        path in ``GET /replicas`` when the catalog is empty so a fresh install
+        doesn't need an admin to run reconciliation before onboarding works.
+        Raises :class:`HTTPException` 502 if the Tavus API itself is down so
+        callers can decide between propagating the error or silently returning
+        an empty list.
+        """
+        live = await self.fetch_live_replicas()
+        for entry in live:
+            await self._upsert_live_replica(db, entry, None)
+        if live:
+            await db.commit()
+        return len(live)
+
     async def fetch_live_replicas(self) -> list[dict[str, Any]]:
         status_code, payload = await tavus_get(_TAVUS_REPLICAS_URL, self._headers())
         if status_code != 200:

@@ -48,9 +48,30 @@ class ReportItem(BaseModel):
     title: str
     report_type: str
     created_at: str
+    # First ~500 chars of the session summary so the list view can render a
+    # real description next to each row instead of an empty "Waiting for data".
+    session_summary_preview: str = ""
+    # Always true for rows returned by the orchestration list endpoint — the
+    # report can be fetched as MD or regenerated as PDF on demand, even when
+    # S3 isn't configured.
+    has_download: bool = True
+    # Kept for backwards compatibility with older clients. Populated when an
+    # S3 presigned URL is available, otherwise null.
     download_url: str | None = None
 
 
 class ReportListResponse(BaseModel):
     project_id: str
     reports: list[ReportItem]
+
+
+class ReportDetailResponse(BaseModel):
+    report_id: str
+    title: str
+    report_type: str
+    created_at: str
+    task: str = ""
+    session_id: str = ""
+    session_summary: str = ""
+    direction_report: str = ""
+    s3_key: str = ""
