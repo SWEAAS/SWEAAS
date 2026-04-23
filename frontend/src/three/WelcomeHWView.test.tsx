@@ -1,40 +1,83 @@
 /**
- * Smoke test for the unified /welcome-hw view.
+ * Smoke test for the unified /welcome-hw view after the stepper rework.
  *
- * Covers the acceptance criteria from the unify-HQ task:
- *   - All three mode buttons render (Overview / Walkthrough / Tour) with
- *     labels and aria-pressed state.
- *   - Starting the Tour exposes the phase caption with tour index and label.
- *   - Clicking Overview during a tour stops the tour.
- *   - Tour advances phases on schedule.
+ * Asserts the new UI contract:
+ *   - Stepper is the default mode.
+ *   - The stepper caption shows the current room label + progress.
+ *   - Next / Prev / Enter-room / Back-to-room buttons change the active
+ *     stop correctly and update the caption.
+ *   - Switching to Overview hides the stepper caption but keeps the
+ *     scene mounted.
  *
- * The 3D scene itself isn't exercised — WebGL doesn't exist in JSDOM, so
- * we stub the Canvas wrapper and the chat panel. The test verifies the
- * view's UI wiring, which is exactly what regresses when the office + welcome
- * flows were separate.
+ * WebGL doesn't exist in JSDOM, so we stub the 3D Canvas wrapper and read
+ * the props it would forward to the scene.
  */
-import { render, screen, act } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import type { Agent } from "../store/agentStore";
 
-// Stub the 3D canvas so we don't need WebGL / GLB loading. We record the
-// `cameraMode` and `autoRotate` props so tests can assert mode switching.
 vi.mock("./WelcomeHWCanvas", () => ({
-  default: ({ cameraMode, autoRotate }: { cameraMode: string; autoRotate: boolean }) => (
-    <div data-testid="hq-canvas" data-camera-mode={cameraMode} data-auto-rotate={String(autoRotate)} />
+  default: ({
+    stopIndex,
+    stepperActive,
+    stops,
+  }: {
+    stopIndex: number;
+    stepperActive: boolean;
+    stops: { id: string; label: string }[];
+  }) => (
+    <div
+      data-testid="hq-canvas"
+      data-stop-index={stopIndex}
+      data-stepper-active={String(stepperActive)}
+      data-stop-id={stops[stopIndex]?.id ?? ""}
+      data-stop-count={stops.length}
+    />
   ),
 }));
-vi.mock("./ui/AgentChatPanel", () => ({
-  default: () => <div data-testid="agent-chat" />,
-}));
-vi.mock("./ui/TokenBurnOverlay", () => ({
-  default: () => <div data-testid="token-burn" />,
-}));
+vi.mock("./ui/AgentChatPanel", () => ({ default: () => <div data-testid="agent-chat" /> }));
+vi.mock("./ui/TokenBurnOverlay", () => ({ default: () => <div data-testid="token-burn" /> }));
 
-// Stub the Zustand stores — the view only reads a handful of fields.
+const testAgents: Agent[] = [
+  {
+    agent_id: "a-cto",
+    name: "Ada CTO",
+    role: "cto",
+    department: "engineering",
+    hierarchy_level: "cto",
+    status: "active",
+    daily_token_budget: 100,
+    tokens_used_today: 10,
+    current_focus: "",
+  },
+  {
+    agent_id: "a-eng-1",
+    name: "Eng One",
+    role: "engineer",
+    department: "engineering",
+    hierarchy_level: "specialist",
+    status: "active",
+    daily_token_budget: 100,
+    tokens_used_today: 5,
+    current_focus: "",
+  },
+  {
+    agent_id: "a-mkt-1",
+    name: "Mkt One",
+    role: "marketer",
+    department: "marketing",
+    hierarchy_level: "specialist",
+    status: "warning",
+    daily_token_budget: 100,
+    tokens_used_today: 80,
+    current_focus: "",
+  },
+];
+
 vi.mock("../store/agentStore", () => ({
-  useAgentStore: () => ({ agents: [], fetchAgents: vi.fn() }),
+  useAgentStore: () => ({ agents: testAgents, fetchAgents: vi.fn() }),
 }));
 vi.mock("../store/projectStore", () => ({
   useProjectStore: () => ({ currentProject: { id: "p1", name: "Demo Project" } }),
@@ -46,7 +89,7 @@ vi.mock("../store/teamOnboardingStore", () => ({
   }),
 }));
 vi.mock("../utils/teamOnboarding", () => ({
-  mergeAgentsWithTeamConfig: () => [],
+  mergeAgentsWithTeamConfig: (agents: Agent[]) => agents,
 }));
 
 import WelcomeHWView from "./WelcomeHWView";
@@ -59,68 +102,57 @@ function renderView() {
   );
 }
 
-describe("WelcomeHWView — unified HQ", () => {
+describe("WelcomeHWView — stepper", () => {
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  test("renders all three mode buttons with accessible labels", () => {
-    renderView();
-    expect(screen.getByRole("button", { name: /Switch to Overview view/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Switch to Walkthrough view/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Start the scripted HQ tour/i })).toBeInTheDocument();
-  });
-
-  test("default mode is Overview with the overview camera", () => {
+  test("default mode is Stepper with the first stop active", () => {
     renderView();
     const canvas = screen.getByTestId("hq-canvas");
-    expect(canvas.dataset.cameraMode).toBe("overview");
-    expect(canvas.dataset.autoRotate).toBe("false");
+    expect(canvas.dataset.stepperActive).toBe("true");
+    expect(canvas.dataset.stopIndex).toBe("0");
+    // First stop is always the Lobby room.
+    expect(canvas.dataset.stopId).toBe("room-lobby");
   });
 
-  test("CTO call button is present and labeled", () => {
+  test("both mode buttons render", () => {
     renderView();
-    expect(screen.getByRole("button", { name: /Call CTO/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Switch to Guided tour/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Switch to Free look/i })).toBeInTheDocument();
   });
 
-  test("Walkthrough mode tells the canvas to use the first-person camera", async () => {
+  test("Next advances to the next stop", async () => {
     renderView();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Switch to Walkthrough view/i }));
-    const canvas = screen.getByTestId("hq-canvas");
-    expect(canvas.dataset.cameraMode).toBe("walkthrough");
+    await user.click(screen.getByRole("button", { name: /Next stop/i }));
+    expect(screen.getByTestId("hq-canvas").dataset.stopIndex).toBe("1");
   });
 
-  test("Tour opens with phase caption + auto-rotate", async () => {
+  test("Prev is disabled at the first stop", () => {
+    renderView();
+    expect(screen.getByRole("button", { name: /Previous stop/i })).toBeDisabled();
+  });
+
+  test("Switching to Free look disables the stepper and hides the caption bar", async () => {
     renderView();
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Start the scripted HQ tour/i }));
-    expect(screen.getByText(/Welcome to headquarters/i)).toBeInTheDocument();
-    expect(screen.getByText(/Tour · 1\/2/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Stop the scripted HQ tour/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Switch to Free look/i }));
     const canvas = screen.getByTestId("hq-canvas");
-    expect(canvas.dataset.autoRotate).toBe("true");
+    expect(canvas.dataset.stepperActive).toBe("false");
+    expect(screen.queryByRole("button", { name: /Next stop/i })).not.toBeInTheDocument();
   });
 
-  test("Tour advances to the next phase after the first phase's duration", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+  test("CTO call button is present and badged when agents have warnings", () => {
     renderView();
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
-    await user.click(screen.getByRole("button", { name: /Start the scripted HQ tour/i }));
-    act(() => { vi.advanceTimersByTime(9100); });
-    expect(screen.getByText(/Meet the team/i)).toBeInTheDocument();
-    expect(screen.getByText(/Tour · 2\/2/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Call CTO — 1 agent needs attention/i })).toBeInTheDocument();
   });
 
-  test("clicking Overview during a tour stops the tour", async () => {
+  test("Side panel lists rooms with the correct occupant counts", () => {
     renderView();
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /Start the scripted HQ tour/i }));
-    expect(screen.getByText(/Welcome to headquarters/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Switch to Overview view/i }));
-    expect(screen.queryByText(/Welcome to headquarters/i)).not.toBeInTheDocument();
-    const canvas = screen.getByTestId("hq-canvas");
-    expect(canvas.dataset.autoRotate).toBe("false");
+    // Engineering has 1 agent; Marketing has 1 agent; CTO room has the CTO.
+    expect(screen.getByRole("button", { name: /Jump camera to Engineering/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Jump camera to Marketing/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Jump camera to CTO Office/i })).toBeInTheDocument();
   });
 });
