@@ -1,0 +1,129 @@
+# Deploy frontend to AWS Amplify Hosting on push to main (frontend paths).
+#
+# Flow:
+#   1. Install + lint + build the app in CI — catches TypeScript / Vite errors
+#      before we hand off to Amplify, so a bad commit fails the PR check instead
+#      of silently shipping a broken dist.
+#   2. Trigger an Amplify RELEASE job (authoritative build + deploy + CDN invalidation).
+#   3. Poll the job status so the GitHub Actions run only reports success when
+#      the CDN is actually serving the new build.
+#
+# NOTE ON AMPLIFY GITHUB AUTO-BUILD:
+#   If Amplify's own GitHub App integration is also set to auto-build on push
+#   (Amplify console → App settings → Build settings → Enable auto-build), every
+#   push to main will trigger TWO deploys (this workflow + Amplify's webhook).
+#   Disable Amplify auto-build if you want GitHub Actions to be the single
+#   source of truth, or drop the `push` trigger here and keep only
+#   `workflow_dispatch` if Amplify auto-build is preferred.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   AWS_ACCESS_KEY_ID          — same user as the backend workflow; needs
+#   AWS_SECRET_ACCESS_KEY        amplify:StartJob + amplify:GetJob on app d3rw7tzkg9y12a
+#   VITE_SUPABASE_URL          — baked into the bundle at build time
+#   VITE_SUPABASE_PUBLISHABLE_KEY
+#   VITE_SENTRY_DSN            — optional; CI build passes empty if unset
+
+name: Deploy Frontend to AWS Amplify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+    inputs:
+      skip_ci_build:
+        description: "Skip local CI build (trust Amplify's remote build)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AMPLIFY_APP_ID: d3rw7tzkg9y12a
+  AMPLIFY_BRANCH: main
+  VITE_API_BASE_URL: https://api.sweaas.com/api/v1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: ${{ !inputs.skip_ci_build }}
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        if: ${{ !inputs.skip_ci_build }}
+        working-directory: frontend
+        run: npm run lint
+        continue-on-error: true # advisory only — don't block deploy on lint warnings
+
+      - name: Build (CI pre-flight)
+        if: ${{ !inputs.skip_ci_build }}
+        working-directory: frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Trigger Amplify RELEASE job
+        id: amplify_start
+        run: |
+          JOB_ID=$(aws amplify start-job \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --job-type RELEASE \
+            --region "$AWS_REGION" \
+            --query 'jobSummary.jobId' --output text)
+          echo "Started Amplify job ${JOB_ID} for ${AMPLIFY_APP_ID}:${AMPLIFY_BRANCH}"
+          echo "job_id=${JOB_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Amplify deployment to finish
+        env:
+          JOB_ID: ${{ steps.amplify_start.outputs.job_id }}
+        run: |
+          for i in $(seq 1 80); do
+            STATUS=$(aws amplify get-job \
+              --app-id "$AMPLIFY_APP_ID" \
+              --branch-name "$AMPLIFY_BRANCH" \
+              --job-id "$JOB_ID" \
+              --region "$AWS_REGION" \
+              --query 'job.summary.status' --output text)
+            echo "[$i] status=$STATUS"
+            case "$STATUS" in
+              SUCCEED)
+                echo "::notice title=Amplify deploy succeeded::job $JOB_ID — https://${AMPLIFY_BRANCH}.${AMPLIFY_APP_ID}.amplifyapp.com"
+                exit 0
+                ;;
+              FAILED|CANCELLED)
+                echo "::error title=Amplify deploy $STATUS::job $JOB_ID — check the Amplify console for build logs"
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error title=Amplify deploy timed out::job $JOB_ID did not finish within 20 minutes"
+          exit 1
