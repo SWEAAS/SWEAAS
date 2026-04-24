@@ -1,27 +1,28 @@
 # Deploy frontend to AWS Amplify Hosting on push to main (frontend paths).
 #
-# Flow:
-#   1. Install + lint + build the app in CI — catches TypeScript / Vite errors
-#      before we hand off to Amplify, so a bad commit fails the PR check instead
-#      of silently shipping a broken dist.
-#   2. Trigger an Amplify RELEASE job (authoritative build + deploy + CDN invalidation).
-#   3. Poll the job status so the GitHub Actions run only reports success when
-#      the CDN is actually serving the new build.
+# Amplify app `d3rw7tzkg9y12a` is NOT connected to a Git provider — it is a
+# manual-deploy app. That means we can't use `amplify:StartJob` (which requires
+# a Git-connected app); we have to build the dist locally, zip it, and push it
+# in via `CreateDeployment` + `StartDeployment`.
 #
-# NOTE ON AMPLIFY GITHUB AUTO-BUILD:
-#   If Amplify's own GitHub App integration is also set to auto-build on push
-#   (Amplify console → App settings → Build settings → Enable auto-build), every
-#   push to main will trigger TWO deploys (this workflow + Amplify's webhook).
-#   Disable Amplify auto-build if you want GitHub Actions to be the single
-#   source of truth, or drop the `push` trigger here and keep only
-#   `workflow_dispatch` if Amplify auto-build is preferred.
+# Flow:
+#   1. Build the app in CI — this is the authoritative build since Amplify
+#      doesn't rebuild on its side.
+#   2. Zip frontend/dist → dist.zip
+#   3. `aws amplify create-deployment` to get a presigned S3 URL + jobId.
+#   4. `curl -T dist.zip <presigned-url>` to upload the bundle.
+#   5. `aws amplify start-deployment` with the jobId.
+#   6. Poll `get-job` until SUCCEED or FAILED so the Actions run reflects
+#      actual CDN state.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   AWS_ACCESS_KEY_ID          — same user as the backend workflow; needs
-#   AWS_SECRET_ACCESS_KEY        amplify:StartJob + amplify:GetJob on app d3rw7tzkg9y12a
-#   VITE_SUPABASE_URL          — baked into the bundle at build time
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+#     IAM user needs: amplify:CreateDeployment, amplify:StartDeployment,
+#     amplify:GetJob on app d3rw7tzkg9y12a.
+#   VITE_SUPABASE_URL              — baked into the bundle at build time
 #   VITE_SUPABASE_PUBLISHABLE_KEY
-#   VITE_SENTRY_DSN            — optional; CI build passes empty if unset
+#   VITE_SENTRY_DSN                — optional
 
 name: Deploy Frontend to AWS Amplify
 
@@ -32,12 +33,6 @@ on:
       - "frontend/**"
       - ".github/workflows/deploy-frontend.yml"
   workflow_dispatch:
-    inputs:
-      skip_ci_build:
-        description: "Skip local CI build (trust Amplify's remote build)"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -63,24 +58,32 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        if: ${{ !inputs.skip_ci_build }}
         working-directory: frontend
         run: npm ci
 
       - name: Lint
-        if: ${{ !inputs.skip_ci_build }}
         working-directory: frontend
         run: npm run lint
-        continue-on-error: true # advisory only — don't block deploy on lint warnings
+        continue-on-error: true # advisory — don't block deploy on lint warnings
 
-      - name: Build (CI pre-flight)
-        if: ${{ !inputs.skip_ci_build }}
+      - name: Build production bundle
         working-directory: frontend
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
-        run: npm run build
+        run: |
+          npm run build
+          ls -la dist/ | head
+          du -sh dist
+
+      - name: Create deployment artifact
+        working-directory: frontend
+        run: |
+          cd dist
+          zip -rq ../dist.zip .
+          cd ..
+          ls -la dist.zip
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -89,21 +92,54 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Trigger Amplify RELEASE job
-        id: amplify_start
+      - name: Create Amplify deployment (get presigned upload URL)
+        id: amplify_create
         run: |
-          JOB_ID=$(aws amplify start-job \
+          JSON=$(aws amplify create-deployment \
             --app-id "$AMPLIFY_APP_ID" \
             --branch-name "$AMPLIFY_BRANCH" \
-            --job-type RELEASE \
             --region "$AWS_REGION" \
-            --query 'jobSummary.jobId' --output text)
-          echo "Started Amplify job ${JOB_ID} for ${AMPLIFY_APP_ID}:${AMPLIFY_BRANCH}"
+            --output json)
+          echo "$JSON"
+          JOB_ID=$(echo "$JSON" | jq -r '.jobId')
+          UPLOAD_URL=$(echo "$JSON" | jq -r '.zipUploadUrl')
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+            echo "::error title=Amplify create-deployment failed::no jobId in response"
+            exit 1
+          fi
           echo "job_id=${JOB_ID}" >> "$GITHUB_OUTPUT"
+          # Keep the presigned URL as a masked env var so it isn't echoed into logs.
+          echo "::add-mask::$UPLOAD_URL"
+          echo "UPLOAD_URL=${UPLOAD_URL}" >> "$GITHUB_ENV"
+
+      - name: Upload dist.zip to Amplify
+        working-directory: frontend
+        run: |
+          HTTP=$(curl -sS -o /tmp/upload.out -w '%{http_code}' \
+            -H "Content-Type: application/zip" \
+            -T dist.zip "$UPLOAD_URL")
+          echo "upload response: HTTP $HTTP"
+          if [ "$HTTP" != "200" ]; then
+            echo "::error title=Amplify upload failed::HTTP $HTTP"
+            cat /tmp/upload.out
+            exit 1
+          fi
+
+      - name: Start Amplify deployment
+        env:
+          JOB_ID: ${{ steps.amplify_create.outputs.job_id }}
+        run: |
+          aws amplify start-deployment \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --job-id "$JOB_ID" \
+            --region "$AWS_REGION" \
+            --output json
+          echo "Started deployment job $JOB_ID"
 
       - name: Wait for Amplify deployment to finish
         env:
-          JOB_ID: ${{ steps.amplify_start.outputs.job_id }}
+          JOB_ID: ${{ steps.amplify_create.outputs.job_id }}
         run: |
           for i in $(seq 1 80); do
             STATUS=$(aws amplify get-job \
@@ -115,11 +151,11 @@ jobs:
             echo "[$i] status=$STATUS"
             case "$STATUS" in
               SUCCEED)
-                echo "::notice title=Amplify deploy succeeded::job $JOB_ID — https://${AMPLIFY_BRANCH}.${AMPLIFY_APP_ID}.amplifyapp.com"
+                echo "::notice title=Amplify deploy succeeded::job $JOB_ID — https://${AMPLIFY_BRANCH}.${AMPLIFY_APP_ID}.amplifyapp.com (also sweaas.com via custom domain)"
                 exit 0
                 ;;
               FAILED|CANCELLED)
-                echo "::error title=Amplify deploy $STATUS::job $JOB_ID — check the Amplify console for build logs"
+                echo "::error title=Amplify deploy $STATUS::job $JOB_ID — check Amplify console for details"
                 exit 1
                 ;;
             esac
