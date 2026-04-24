@@ -1,10 +1,13 @@
 # Deploy backend to AWS ECS on push to main (backend paths).
-# Frontend is deployed automatically via AWS Amplify Hosting (GitHub integration).
+# Frontend is deployed via .github/workflows/deploy-frontend.yml.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   AWS_ACCESS_KEY_ID
 #   AWS_SECRET_ACCESS_KEY
-# IAM user/role needs ECR push + ecs:UpdateService on cluster sweaas / service backend.
+# IAM user/role needs:
+#   - ECR push + ecs:UpdateService on cluster sweaas / service backend
+#   - ecs:RunTask + ecs:DescribeTasks + iam:PassRole for the migration task
+#   - logs:GetLogEvents on /ecs/sweaas-backend for migration log capture
 
 name: Deploy Backend to AWS
 
@@ -16,6 +19,12 @@ on:
       - "pyproject.toml"
       - ".github/workflows/deploy-aws.yml"
   workflow_dispatch:
+    inputs:
+      skip_migrations:
+        description: "Skip `alembic upgrade head` (emergency only — prod may crash if schema is behind)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,10 +64,84 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPO:latest
 
+      # Run alembic migrations BEFORE the service rollout so the new image
+      # starts against an up-to-date schema. Prevents the failure mode we hit
+      # on 2026-04-24: a column referenced in code had no corresponding
+      # migration applied to RDS, so every task boot crashed on startup with
+      # `UndefinedColumnError`. The task was silently dequeued by ALB and
+      # api.sweaas.com returned 503 while GitHub Actions claimed "success"
+      # (old workflow only pushed the image and forced a redeploy, never
+      # health-gated the outcome).
+      #
+      # This step runs a one-off Fargate task with the *current* service's
+      # task definition (so it inherits the Secrets Manager + RDS wiring),
+      # overrides CMD to `alembic upgrade head`, waits for completion, and
+      # fails the workflow if exit code != 0.
+      - name: Run database migrations
+        if: ${{ inputs.skip_migrations != true }}
+        run: |
+          TASK_DEF=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          echo "task def: $TASK_DEF"
+
+          NETCFG=$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].networkConfiguration' \
+            --output json)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$ECS_CLUSTER" \
+            --task-definition "$TASK_DEF" \
+            --launch-type FARGATE \
+            --network-configuration "$NETCFG" \
+            --overrides '{"containerOverrides":[{"name":"backend","command":["alembic","upgrade","head"]}]}' \
+            --started-by "gha-migrate-${GITHUB_SHA:0:8}" \
+            --query 'tasks[0].taskArn' --output text)
+          echo "migration task: $TASK_ARN"
+
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
+
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          STOP_REASON=$(aws ecs describe-tasks \
+            --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].stoppedReason' --output text)
+
+          echo "migration exit code: $EXIT_CODE"
+          echo "stopped reason: $STOP_REASON"
+
+          TASK_ID="${TASK_ARN##*/}"
+          echo "--- migration logs (tail 80) ---"
+          aws logs get-log-events \
+            --log-group-name /ecs/sweaas-backend \
+            --log-stream-name "backend/backend/$TASK_ID" \
+            --limit 80 --query 'events[*].message' --output text 2>&1 | tr '\t' '\n' | tail -80 || true
+          echo "--------------------------------"
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error title=Migration failed::alembic upgrade head exited with code $EXIT_CODE — $STOP_REASON"
+            exit 1
+          fi
+          echo "::notice title=Migrations applied::alembic upgrade head completed cleanly"
+
       - name: Force new ECS deployment
         run: |
           aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
             --force-new-deployment \
-            --region $AWS_REGION
+            --region "$AWS_REGION" \
+            --query 'service.deployments[0].{status:status,rolloutState:rolloutState}' \
+            --output json
+
+      - name: Wait for ECS rollout to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
+          echo "::notice title=ECS rollout complete::service $ECS_SERVICE is stable on the new image"
