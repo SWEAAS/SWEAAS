@@ -73,6 +73,19 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
+          # Diagnostic: confirm that Node actually sees the secrets in process.env.
+          # Prefix-only output so GH's log masker doesn't redact everything.
+          node -e '
+            const keys = ["VITE_API_BASE_URL","VITE_SUPABASE_URL","VITE_SUPABASE_PUBLISHABLE_KEY","VITE_SENTRY_DSN"];
+            for (const k of keys) {
+              const v = process.env[k];
+              if (v && v.length > 0) {
+                console.log(k + " length=" + v.length + " starts_https=" + v.startsWith("https://") + " starts_sb=" + v.startsWith("sb_"));
+              } else {
+                console.log(k + " UNSET");
+              }
+            }
+          '
           # frontend/vite.config.ts reads process.env.VITE_* directly and wires
           # them into Vite's `define`, which guarantees inlining regardless of
           # node-version flakiness in Vite's own env loader. The step env vars
