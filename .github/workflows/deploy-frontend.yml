@@ -73,24 +73,11 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
         run: |
-          # frontend/vite.config.ts sets `envDir: "../"` so Vite loads its .env
-          # from the workspace root (shared with the backend for local dev).
-          # CI has no .env at either path, and Vite v8's process.env merge
-          # leaves `import.meta.env.VITE_*` as undefined when no .env file is
-          # discoverable. That ships a broken bundle (Supabase client throws
-          # "Invalid supabaseUrl" on load — observed live on sweaas.com).
-          #
-          # Write a shim .env at the workspace root from the step env vars so
-          # Vite inlines the real values at build time. File is deleted after
-          # the build so the dist/ artifact doesn't include it.
-          cat > ../.env <<ENV_EOF
-          VITE_API_BASE_URL=${VITE_API_BASE_URL}
-          VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-          VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
-          VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
-          ENV_EOF
+          # frontend/vite.config.ts reads process.env.VITE_* directly and wires
+          # them into Vite's `define`, which guarantees inlining regardless of
+          # node-version flakiness in Vite's own env loader. The step env vars
+          # above are the only source — no shim .env needed.
           npm run build
-          rm -f ../.env
           ls -la dist/ | head
           du -sh dist
           # Post-build sanity: confirm the Supabase URL actually got inlined
