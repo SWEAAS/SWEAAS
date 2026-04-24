@@ -127,10 +127,38 @@ jobs:
       - name: Create deployment artifact
         working-directory: frontend
         run: |
+          # The previous deploy saw dist/models/Building7EEVEE.glb at 18 MB
+          # right before this step, but the resulting dist.zip was only
+          # 8.6 MB — mathematically impossible unless the GLB is missing
+          # from the zip. Dump pre-zip state so we catch it.
+          echo "--- dist/ contents right before zip ---"
+          du -sh dist
+          du -sh dist/*
+          ls -la dist/models/ 2>/dev/null || echo "(no dist/models)"
+
           cd dist
-          zip -rq ../dist.zip .
+          # Use verbose mode so a silent per-file drop (permissions,
+          # quota, large-file limit, whatever) surfaces.
+          zip -r ../dist.zip . | tail -20
           cd ..
           ls -la dist.zip
+
+          echo "--- contents of dist.zip (tail) ---"
+          unzip -l dist.zip | tail -20
+
+          # Catch the smaller-than-its-own-contents bug: if the GLB is in
+          # dist/ but not in the zip, fail now instead of silently deploying
+          # a broken bundle to Amplify.
+          if ! unzip -l dist.zip | grep -q 'models/Building7EEVEE.glb'; then
+            echo "::error title=Zip sanity check failed::dist.zip does not contain models/Building7EEVEE.glb even though it exists in dist/. Something between the build and zip steps is stripping it."
+            exit 1
+          fi
+          ZIP_BUILDING_SIZE=$(unzip -l dist.zip | awk '/models\/Building7EEVEE\.glb/ {print $1}')
+          if [ "${ZIP_BUILDING_SIZE:-0}" -lt 1000000 ]; then
+            echo "::error title=Zip sanity check failed::models/Building7EEVEE.glb in dist.zip is only ${ZIP_BUILDING_SIZE} bytes (expected >1MB)."
+            exit 1
+          fi
+          echo "::notice title=Zip sanity check passed::Building GLB in dist.zip (${ZIP_BUILDING_SIZE} bytes)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
