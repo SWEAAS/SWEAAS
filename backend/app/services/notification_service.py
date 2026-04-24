@@ -11,10 +11,36 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+import re
+
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+
+
+def normalize_phone_e164(raw: str | None, default_country_code: str = "1") -> str | None:
+    """Normalize a phone number to E.164 (+<country><digits>).
+
+    Accepts input with spaces, dashes, parentheses, or a leading `+`. If the
+    digits-only form is 10 chars, prepends the default country code (US/CA).
+    If it already starts with `+`, preserves the country code the caller
+    supplied. Returns None if fewer than 10 digits.
+    """
+    if not raw:
+        return None
+    s = raw.strip()
+    had_plus = s.startswith("+")
+    digits = re.sub(r"\D", "", s)
+    if not digits:
+        return None
+    if had_plus:
+        return f"+{digits}"
+    if len(digits) == 10:
+        return f"+{default_country_code}{digits}"
+    if len(digits) == 11 and digits.startswith(default_country_code):
+        return f"+{digits}"
+    return f"+{digits}" if len(digits) >= 10 else None
 from app.models.notification import Notification, NotificationPreference
 from app.models.user import User
 from app.schemas.notification_schema import (
@@ -50,6 +76,10 @@ _TYPE_TO_PREF_FLAG: dict[str, str] = {
 class NotificationService:
     """Manages notification lifecycle: create, deliver, read, and preference CRUD."""
 
+    # Class-level cache for the AgentMail inbox id — created on first email,
+    # reused for the rest of the process lifetime (avoids a new inbox per send).
+    _agentmail_inbox_id: str | None = None
+
     # ── Preferences ──────────────────────────────────────────────
 
     async def get_preferences(
@@ -83,6 +113,7 @@ class NotificationService:
         pref.timezone = request.timezone
 
         await db.flush()
+        await db.refresh(pref)
         return self._pref_to_response(pref)
 
     async def _get_or_create_preference(
@@ -93,14 +124,18 @@ class NotificationService:
             project_filter = NotificationPreference.project_id.is_(None)
         else:
             project_filter = NotificationPreference.project_id == project_uuid
-        stmt = select(NotificationPreference).where(
-            NotificationPreference.user_id == user_id,
-            project_filter,
+        stmt = (
+            select(NotificationPreference)
+            .where(
+                NotificationPreference.user_id == user_id,
+                project_filter,
+            )
+            .order_by(NotificationPreference.created_at.asc())
         )
         result = await db.execute(stmt)
-        pref = result.scalar_one_or_none()
+        rows = list(result.scalars().all())
 
-        if pref is None:
+        if not rows:
             pref = NotificationPreference(
                 id=uuid4(),
                 user_id=user_id,
@@ -108,7 +143,14 @@ class NotificationService:
             )
             db.add(pref)
             await db.flush()
+            await db.refresh(pref)
+            return pref
 
+        pref = rows[0]
+        for dup in rows[1:]:
+            await db.delete(dup)
+        if len(rows) > 1:
+            await db.flush()
         return pref
 
     # ── Contact Info ─────────────────────────────────────────────
@@ -122,7 +164,12 @@ class NotificationService:
             raise ValueError("User not found")
 
         if request.phone_number is not None:
-            user.phone_number = request.phone_number
+            normalized = normalize_phone_e164(request.phone_number)
+            if normalized is None:
+                raise ValueError(
+                    "Phone number must contain at least 10 digits (E.164 format)."
+                )
+            user.phone_number = normalized
 
         prefs_result = await db.execute(
             select(NotificationPreference).where(
@@ -487,24 +534,56 @@ class NotificationService:
         return channels
 
     async def _send_email(self, email: str, notification: Notification) -> bool:
-        """Send notification email via AgentMail."""
+        """Send notification email via AgentMail (SDK 0.4.x)."""
         if not settings.agentmail_api_key:
-            logger.debug("AgentMail not configured; skipping email for notification %s", notification.id)
+            logger.debug(
+                "AgentMail not configured; skipping email for notification %s",
+                notification.id,
+            )
             return False
 
         try:
             from agentmail import AgentMail
+            from agentmail.inboxes.types import CreateInboxRequest
 
             client = AgentMail(api_key=settings.agentmail_api_key)
-            inbox = client.inboxes.create(display_name="SWEAAS Notifications")
+
+            # Preferred: use the org-scoped inbox configured in AGENTMAIL_INBOX_ID.
+            # That inbox is owned by the operator, has stable identity, and
+            # doesn't spin up a new sandbox inbox on every process start.
+            # Fallback: create/cache one on first send (per-process only).
+            configured_inbox = (settings.agentmail_inbox_id or "").strip()
+            if configured_inbox:
+                inbox_id = configured_inbox
+            elif self._agentmail_inbox_id is not None:
+                inbox_id = self._agentmail_inbox_id
+            else:
+                inbox = client.inboxes.create(
+                    request=CreateInboxRequest(display_name="SWEAAS Notifications")
+                )
+                inbox_id = getattr(inbox, "inbox_id", None) or getattr(inbox, "id", None)
+                if not inbox_id:
+                    raise RuntimeError("AgentMail inbox create returned no id")
+                self.__class__._agentmail_inbox_id = inbox_id
 
             body_html = self._format_email_body(notification)
-            inbox.send(
+            plain_body = f"{notification.title}\n\n{notification.body}"
+            if notification.link_url:
+                plain_body += f"\n\n{notification.link_url}"
+
+            client.inboxes.messages.send(
+                inbox_id=inbox_id,
                 to=email,
                 subject=f"[SWEAAS] {notification.title}",
-                body=body_html,
+                html=body_html,
+                text=plain_body,
             )
-            logger.info("Email sent to %s for notification %s", email, notification.id)
+            logger.info(
+                "Email sent to %s via inbox %s for notification %s",
+                email,
+                inbox_id,
+                notification.id,
+            )
             return True
         except Exception as exc:
             logger.error("Email send failed for %s: %s", email, exc)
@@ -513,26 +592,49 @@ class NotificationService:
     async def _send_sms(self, phone: str, notification: Notification) -> bool:
         """Send notification SMS via Twilio."""
         if not settings.twilio_account_sid or not settings.twilio_auth_token:
-            logger.debug("Twilio not configured; skipping SMS for notification %s", notification.id)
+            logger.debug(
+                "Twilio not configured; skipping SMS for notification %s",
+                notification.id,
+            )
+            return False
+        if not settings.twilio_from_number:
+            logger.error(
+                "Twilio configured but TWILIO_FROM_NUMBER is unset; cannot send SMS."
+            )
+            return False
+
+        to = normalize_phone_e164(phone) or phone
+        try:
+            from twilio.rest import Client
+        except ImportError:
+            logger.error(
+                "Twilio SDK not installed; run `pip install 'twilio>=9,<10'`. "
+                "SMS to %s dropped for notification %s.",
+                to,
+                notification.id,
+            )
             return False
 
         try:
-            from twilio.rest import Client
-
             client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
             sms_body = f"SWEAAS: {notification.title}\n{notification.body[:300]}"
             if notification.link_url:
                 sms_body += f"\n{notification.link_url}"
 
-            client.messages.create(
+            msg = client.messages.create(
                 body=sms_body,
                 from_=settings.twilio_from_number,
-                to=phone,
+                to=to,
             )
-            logger.info("SMS sent to %s for notification %s", phone, notification.id)
+            logger.info(
+                "SMS sent to %s (Twilio SID=%s) for notification %s",
+                to,
+                getattr(msg, "sid", "?"),
+                notification.id,
+            )
             return True
         except Exception as exc:
-            logger.error("SMS send failed for %s: %s", phone, exc)
+            logger.error("SMS send failed for %s: %s", to, exc)
             return False
 
     def _format_email_body(self, notification: Notification) -> str:

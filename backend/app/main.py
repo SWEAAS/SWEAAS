@@ -53,10 +53,15 @@ async def _ensure_dev_user() -> None:
             )
             existing_user = result.scalar_one_or_none()
             if existing_user is not None:
-                existing_user.email = "user@sweaas.dev"
+                # Only fill in defaults on fields the operator hasn't set —
+                # do NOT overwrite a manually-updated email (or role) on every
+                # backend restart. Previously this clobbered custom dev emails.
+                if not existing_user.email:
+                    existing_user.email = "user@sweaas.dev"
                 if not existing_user.full_name:
                     existing_user.full_name = "Dev User"
-                existing_user.role = "owner"
+                if not existing_user.role:
+                    existing_user.role = "owner"
                 await session.commit()
                 return
 

@@ -72,8 +72,12 @@ class Settings(BaseSettings):
     stripe_connect_return_url: str = "http://localhost:5173/revenue?stripe=complete"
     stripe_connect_refresh_url: str = "http://localhost:5173/revenue?stripe=refresh"
 
-    # AgentMail
+    # AgentMail — prefer an org-scoped shared inbox so outbound mail uses a
+    # stable reply-to / DKIM identity. If unset, the service falls back to
+    # creating a new sandbox inbox per backend process (not recommended for
+    # production, but keeps local dev working).
     agentmail_api_key: str = ""
+    agentmail_inbox_id: str = ""
 
     # Tavus (CTO + customer-facing video; customer IDs optional — fallback to CTO)
     tavus_api_key: str = ""

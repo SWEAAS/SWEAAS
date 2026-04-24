@@ -17,6 +17,28 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _map_session_status(orchestration_status: str) -> str:
+    """Map an orchestration-level status onto the AgentSession enum.
+
+    AgentSession.status is expected to be one of: running | paused | done.
+    """
+    s = (orchestration_status or "").lower()
+    if s in ("running", "pending", "in_progress"):
+        return "running"
+    if s in ("paused", "strike"):
+        return "paused"
+    return "done"
+
 # In-memory session tracking (complement to DB persistence)
 _SESSIONS: dict[str, dict[str, Any]] = {}
 
@@ -302,16 +324,23 @@ class OrchestrationService:
         return 500_000
 
     async def _persist_session(self, session_data: dict) -> None:
-        """Persist session results to the DB reports table."""
+        """Persist session results to the DB reports + agent_sessions tables."""
         try:
+            from sqlalchemy import select
             from app.core.database import async_session_factory
+            from app.models.agent import AgentConfig, AgentSession
             from app.models.task import Report
 
             project_id = uuid.UUID(session_data["project_id"])
+            started_at_str = session_data.get("started_at")
+            completed_at_str = session_data.get("completed_at")
+            started_at = _parse_iso(started_at_str) or datetime.now(timezone.utc)
+            completed_at = _parse_iso(completed_at_str)
+
             async with async_session_factory() as session:
                 report = Report(
                     project_id=project_id,
-                    title=f"Session Report — {session_data.get('started_at', 'unknown')[:10]}",
+                    title=f"Session Report — {started_at_str[:10] if started_at_str else 'unknown'}",
                     summary=json.dumps({
                         "session_id": session_data["session_id"],
                         "task": session_data.get("task", ""),
@@ -321,10 +350,42 @@ class OrchestrationService:
                     report_type="session",
                 )
                 session.add(report)
+
+                # Also persist an AgentSession row so /orchestration/sessions
+                # survives uvicorn restarts (previously the table was unused —
+                # sessions lived only in the in-memory _SESSIONS dict).
+                # We attach the session to the project's CTO (hierarchy_level
+                # == "cto") when available, else any agent on the project.
+                cto_stmt = select(AgentConfig).where(
+                    AgentConfig.project_id == project_id,
+                    AgentConfig.hierarchy_level == "cto",
+                ).limit(1)
+                cto_row = (await session.execute(cto_stmt)).scalar_one_or_none()
+                if cto_row is None:
+                    any_stmt = select(AgentConfig).where(
+                        AgentConfig.project_id == project_id
+                    ).limit(1)
+                    cto_row = (await session.execute(any_stmt)).scalar_one_or_none()
+
+                if cto_row is not None:
+                    agent_session = AgentSession(
+                        agent_id=cto_row.id,
+                        sandbox_id=session_data.get("sandbox_id") or None,
+                        status=_map_session_status(session_data.get("status", "completed")),
+                        started_at=started_at,
+                        ended_at=completed_at,
+                    )
+                    session.add(agent_session)
+                else:
+                    logger.warning(
+                        "No agent_configs found for project %s; cannot persist AgentSession",
+                        project_id,
+                    )
+
                 await session.commit()
-                logger.info("Persisted session report for %s", session_data["session_id"])
+                logger.info("Persisted session %s (report + agent_session)", session_data["session_id"])
         except Exception as exc:
-            logger.warning("Failed to persist session: %s", exc)
+            logger.warning("Failed to persist session: %s", exc, exc_info=True)
 
     async def _notify_webhook(self, session_data: dict) -> None:
         """Post session summary to the feedback/Slack webhook."""

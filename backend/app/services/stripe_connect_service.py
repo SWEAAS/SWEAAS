@@ -228,16 +228,20 @@ class StripeConnectService:
         pi = stripe.PaymentIntent.retrieve(
             payment_intent_id, expand=["latest_charge.application_fee"]
         )
-        amount = pi.amount or 0
+        amount = getattr(pi, "amount", 0) or 0
 
         fee_amount = 0
-        latest_charge = pi.get("latest_charge")
-        if isinstance(latest_charge, dict):
-            app_fee = latest_charge.get("application_fee")
-            if isinstance(app_fee, dict):
-                fee_amount = app_fee.get("amount", 0)
-        elif hasattr(latest_charge, "application_fee") and latest_charge.application_fee:
-            fee_amount = getattr(latest_charge.application_fee, "amount", 0)
+        latest_charge = getattr(pi, "latest_charge", None)
+        if latest_charge is not None:
+            if isinstance(latest_charge, dict):
+                app_fee = latest_charge.get("application_fee")
+            else:
+                app_fee = getattr(latest_charge, "application_fee", None)
+            if app_fee is not None:
+                if isinstance(app_fee, dict):
+                    fee_amount = app_fee.get("amount", 0) or 0
+                else:
+                    fee_amount = getattr(app_fee, "amount", 0) or 0
 
         net = amount - fee_amount
 
