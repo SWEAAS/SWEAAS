@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.llm_budget import budget_tracker
 from app.models.agent import AgentConfig
+from app.models.budget import TokenUsageLog
 from app.models.project import ProjectConfig
 from app.schemas.budget_schema import (
     AgentBudgetSnapshot,
@@ -37,9 +39,29 @@ class BudgetService:
         if project_id:
             stmt = stmt.where(AgentConfig.project_id == project_id)
         result = await db.execute(stmt)
-        agents = result.scalars().all()
+        agents = list(result.scalars().all())
 
-        agent_snapshots = [self._build_snapshot(agent) for agent in agents]
+        # Source of truth: token_usage_logs aggregated over the last 24h.
+        # agent_configs.tokens_used_today is a legacy cache that drifted from
+        # reality (see audit-2026-04-24.md Finding #3); we now derive per-agent
+        # consumption directly from the log table.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        usage_stmt = (
+            select(
+                TokenUsageLog.agent_id,
+                func.coalesce(func.sum(TokenUsageLog.total_tokens), 0).label("used"),
+            )
+            .where(TokenUsageLog.created_at >= cutoff)
+            .group_by(TokenUsageLog.agent_id)
+        )
+        if project_id:
+            usage_stmt = usage_stmt.where(TokenUsageLog.project_id == project_id)
+        usage_rows = (await db.execute(usage_stmt)).all()
+        usage_by_agent: dict[UUID, int] = {row.agent_id: int(row.used or 0) for row in usage_rows}
+
+        agent_snapshots = [
+            self._build_snapshot(agent, usage_by_agent.get(agent.id, 0)) for agent in agents
+        ]
         total_budget = sum(s.token_budget for s in agent_snapshots)
         total_used = sum(s.tokens_used for s in agent_snapshots)
         consumption_pct = (
@@ -132,7 +154,16 @@ class BudgetService:
         agent = await db.get(AgentConfig, agent_id)
         if agent is None:
             return None
-        return self._build_snapshot(agent)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        row = (
+            await db.execute(
+                select(func.coalesce(func.sum(TokenUsageLog.total_tokens), 0)).where(
+                    TokenUsageLog.agent_id == agent_id,
+                    TokenUsageLog.created_at >= cutoff,
+                )
+            )
+        ).scalar() or 0
+        return self._build_snapshot(agent, int(row))
 
     async def create_checkout_session(
         self, project_id: str, price_id: str
@@ -152,27 +183,45 @@ class BudgetService:
         import stripe
 
         stripe.api_key = settings.stripe_secret_key
+
+        # Drop any existing query string so we can append our own params cleanly.
+        base_return = (settings.stripe_connect_return_url or "").split("?")[0]
+        if not base_return:
+            base_return = "http://localhost:5173/billing"
+
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price_id, "quantity": 1}],
-            success_url=(
-                "https://app.sweaas.dev/billing/success?session_id={CHECKOUT_SESSION_ID}"
-            ),
-            cancel_url="https://app.sweaas.dev/billing/cancel",
+            success_url=f"{base_return}?stripe=checkout_success&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_return}?stripe=checkout_cancel",
             metadata={"project_id": project_id},
         )
         return StripeCheckoutResponse(checkout_url=session.url, session_id=session.id)
 
-    def _build_snapshot(self, agent: AgentConfig) -> AgentBudgetSnapshot:
+    def _build_snapshot(
+        self, agent: AgentConfig, tokens_used_override: int | None = None
+    ) -> AgentBudgetSnapshot:
+        """Render a per-agent budget snapshot.
+
+        Source of truth for `tokens_used` is `token_usage_logs` (passed in via
+        `tokens_used_override`). The in-memory `budget_tracker` and the cached
+        `agent.tokens_used_today` column are only consulted as fallbacks, since
+        both were found to drift from the log-based source of truth.
+        """
         aid = str(agent.id)
         live = budget_tracker.get_snapshot(aid) if budget_tracker.is_initialised else None
 
-        if live:
+        if tokens_used_override is not None:
+            tokens_used = tokens_used_override
+        elif live:
             tokens_used = live["tokens_used_today"]
+        else:
+            tokens_used = agent.tokens_used_today
+
+        if live:
             token_budget = live["daily_token_budget"]
             strike_count = live["strike_count"]
         else:
-            tokens_used = agent.tokens_used_today
             token_budget = agent.daily_token_budget
             strike_count = agent.strike_count
 

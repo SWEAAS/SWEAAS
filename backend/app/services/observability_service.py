@@ -2,15 +2,16 @@
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.agent import AgentConfig, AgentSession
+from app.models.budget import TokenUsageLog
 from app.models.task import Report
 from app.schemas.observability_schema import (
     DepartmentMetric,
@@ -33,7 +34,24 @@ class ObservabilityService:
         if project_id:
             stmt = stmt.where(AgentConfig.project_id == project_id)
         result = await db.execute(stmt)
-        agents = result.scalars().all()
+        agents = list(result.scalars().all())
+
+        # Consolidated with BudgetService: token consumption is derived from
+        # the token_usage_logs table (last 24h), not from the cached
+        # agent_configs.tokens_used_today column. See budget_service.py.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        usage_stmt = (
+            select(
+                TokenUsageLog.agent_id,
+                func.coalesce(func.sum(TokenUsageLog.total_tokens), 0).label("used"),
+            )
+            .where(TokenUsageLog.created_at >= cutoff)
+            .group_by(TokenUsageLog.agent_id)
+        )
+        if project_id:
+            usage_stmt = usage_stmt.where(TokenUsageLog.project_id == project_id)
+        usage_rows = (await db.execute(usage_stmt)).all()
+        usage_by_agent: dict = {row.agent_id: int(row.used or 0) for row in usage_rows}
 
         departments: dict[str, dict[str, int]] = defaultdict(
             lambda: {"active_agents": 0, "tokens_used_today": 0, "warnings": 0}
@@ -41,7 +59,7 @@ class ObservabilityService:
         for agent in agents:
             dept = departments[agent.department]
             dept["active_agents"] += 1
-            dept["tokens_used_today"] += agent.tokens_used_today
+            dept["tokens_used_today"] += usage_by_agent.get(agent.id, 0)
             dept["warnings"] += 1 if agent.status == "warning" else 0
 
         running_stmt = select(AgentSession).where(AgentSession.status == "running")

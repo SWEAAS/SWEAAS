@@ -55,7 +55,15 @@ async def onboard_connect(
     """Start or resume Stripe Connect onboarding for the authenticated user's org."""
     org_id = await _resolve_org_id(user, db)
     email = await _resolve_user_email(user, db)
-    return await svc.create_connected_account(org_id, email, db)
+    try:
+        return await svc.create_connected_account(org_id, email, db)
+    except stripe.StripeError as exc:
+        user_message = getattr(exc, "user_message", None) or str(exc)
+        logger.warning("Stripe onboarding failed for org %s: %s", org_id, user_message)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Stripe onboarding error: {user_message}",
+        ) from exc
 
 
 @router.get("/connect/status", response_model=ConnectStatusResponse)
@@ -105,13 +113,21 @@ async def create_checkout(
             detail="Stripe Connect onboarding must be completed before accepting payments.",
         )
 
-    return await svc.create_checkout_session(
-        project_id=body.project_id,
-        price_id=body.price_id,
-        connected_account_id=acct.id,
-        stripe_account_id=acct.stripe_account_id,
-        db=db,
-    )
+    try:
+        return await svc.create_checkout_session(
+            project_id=body.project_id,
+            price_id=body.price_id,
+            connected_account_id=acct.id,
+            stripe_account_id=acct.stripe_account_id,
+            db=db,
+        )
+    except stripe.StripeError as exc:
+        user_message = getattr(exc, "user_message", None) or str(exc)
+        logger.warning("Stripe checkout creation failed for org %s: %s", org_id, user_message)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Stripe checkout error: {user_message}",
+        ) from exc
 
 
 # ── Revenue ─────────────────────────────────────────────────────
@@ -218,11 +234,18 @@ async def stripe_webhook(
         )
 
     try:
-        event = stripe.Webhook.construct_event(body, sig, settings.stripe_webhook_secret)
+        stripe.Webhook.construct_event(body, sig, settings.stripe_webhook_secret)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook payload.") from exc
     except stripe.SignatureVerificationError as exc:
         raise HTTPException(status_code=400, detail="Invalid Stripe signature.") from exc
+
+    # handle_webhook_event uses dict-style .get() throughout; stripe.Event
+    # StripeObjects don't implement .get(), so work from the raw JSON body.
+    try:
+        event = json.loads(body)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook JSON payload.") from exc
 
     msg = await svc.handle_webhook_event(event, db)
     await db.commit()

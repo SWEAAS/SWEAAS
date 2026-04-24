@@ -51,7 +51,10 @@ dependencies = [
   "stripe>=10.0.0",
 
   # Email (AI agents)
-  "agentmail>=0.1.0",
+  "agentmail>=0.4.0,<0.5.0",
+
+  # SMS (customer notifications)
+  "twilio>=9.0.0,<10.0.0",
 
   # Video conferencing
   "httpx>=0.28.0,<1.0.0",
