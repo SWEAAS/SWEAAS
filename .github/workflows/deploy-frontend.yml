@@ -93,6 +93,7 @@ jobs:
           npm run build
           ls -la dist/ | head
           du -sh dist
+
           # Post-build sanity: confirm the Supabase URL actually got inlined
           # so we fail loudly in CI instead of silently shipping a broken bundle.
           if ! grep -rq 'supabase\.co' dist/assets/*.js 2>/dev/null; then
@@ -100,6 +101,28 @@ jobs:
             exit 1
           fi
           echo "::notice title=Build sanity check passed::Supabase URL is inlined in dist/"
+
+          # Post-build sanity: the 3D HQ scene loads the Building GLB from
+          # /models/Building7EEVEE.glb. If Vite's public-dir copy silently
+          # dropped it (previous deploys shipped a 8.6 MB zip with an empty
+          # dist/models/, breaking the /welcome-hw page), fail the deploy
+          # loudly.
+          echo "--- dist/models/ ---"
+          ls -la dist/models/ 2>/dev/null || echo "(dist/models/ missing entirely)"
+          if [ ! -s dist/models/Building7EEVEE.glb ]; then
+            echo "::error title=Build sanity check failed::dist/models/Building7EEVEE.glb is missing or empty after vite build. Public-dir copy failed; the /welcome-hw page will break in prod."
+            echo "--- for diagnostic: public/models/ ---"
+            ls -la public/models/ 2>/dev/null || echo "(public/models/ missing)"
+            echo "--- file sizes in public/ after checkout ---"
+            find public -type f -exec ls -la {} \;
+            exit 1
+          fi
+          BUILDING_SIZE=$(wc -c < dist/models/Building7EEVEE.glb)
+          if [ "$BUILDING_SIZE" -lt 1000000 ]; then
+            echo "::error title=Build sanity check failed::dist/models/Building7EEVEE.glb is only ${BUILDING_SIZE} bytes (expected >1MB). Likely an LFS pointer or the SPA fallback."
+            exit 1
+          fi
+          echo "::notice title=Build sanity check passed::Building GLB present (${BUILDING_SIZE} bytes)"
 
       - name: Create deployment artifact
         working-directory: frontend
