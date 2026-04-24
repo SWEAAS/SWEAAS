@@ -167,6 +167,69 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Enforce Amplify SPA rewrite rules
+        # Amplify's default SPA rewrite regex has a hardcoded extension
+        # allowlist: any path whose extension isn't in `(css|gif|ico|jpg|js
+        # |png|txt|svg|woff|woff2|ttf|map|json|webp)` gets rewritten to
+        # /index.html. In March '26 we shipped a 3D Headquarters view that
+        # loads a glTF Binary asset at /models/Building7EEVEE.glb; Amplify
+        # rewrote the request to index.html, three.js tried to parse HTML
+        # as a glTF, and the whole canvas crashed with "3D scene failed to
+        # load" in prod. The config had to be fixed once by hand — and
+        # since Amplify custom-rules are global-app config, NOT part of
+        # any deploy zip, a console nudge or account reset could silently
+        # revert it.
+        #
+        # This step asserts the rules on every deploy. It's idempotent —
+        # update-app just writes the desired state — so a drift on
+        # Tuesday gets healed on Wednesday's deploy. The allowlist here
+        # is the source of truth; add new extensions here when the app
+        # starts serving new asset types.
+        #
+        # Requires the IAM user to have amplify:UpdateApp on the app.
+        run: |
+          # Additions over the Amplify default, with why we need each:
+          #   glb, gltf   — three.js / glTF 2.0 assets (Headquarters 3D)
+          #   bin         — external buffers sometimes shipped with glTF
+          #   hdr, exr    — HDR cube maps for @react-three/drei Environment
+          #   ktx2        — KTX 2.0 compressed textures (three.js tooling)
+          #   mp4, webm   — Tavus video replies, interstitials
+          #   mp3, ogg, wav — audio, if ever needed
+          #   wasm        — WebAssembly modules (Draco/Basis decoders etc.)
+          #   avif, jpeg  — modern/alt image formats
+          #   obj, fbx    — alt 3D formats (defensive)
+          DESIRED_SOURCE='</^[^.]+$|\.(?!(css|gif|ico|jpg|jpeg|js|png|txt|svg|woff|woff2|ttf|map|json|webp|avif|glb|gltf|bin|hdr|exr|ktx2|mp3|mp4|webm|wav|ogg|wasm|obj|fbx)$)([^.]+$)/>'
+
+          # Read current rules so we only call update-app when we'd
+          # actually change something. Cheap optimization + keeps logs
+          # clean on no-op deploys.
+          CURRENT=$(aws amplify get-app \
+            --app-id "$AMPLIFY_APP_ID" \
+            --region "$AWS_REGION" \
+            --query 'app.customRules[?target==`/index.html`].source | [0]' \
+            --output text)
+
+          if [ "$CURRENT" = "$DESIRED_SOURCE" ]; then
+            echo "::notice title=Amplify rules::SPA rewrite rules already match desired state; skipping update."
+          else
+            echo "Current SPA rewrite source:"
+            echo "  $CURRENT"
+            echo "Updating to:"
+            echo "  $DESIRED_SOURCE"
+            # Build the JSON payload with jq so backslashes in the regex
+            # get escaped properly (the regex contains `\.` which must
+            # ship as `\\.` in JSON).
+            RULES=$(jq -nc --arg src "$DESIRED_SOURCE" \
+              '[{source: $src, target: "/index.html", status: "200"}]')
+            aws amplify update-app \
+              --app-id "$AMPLIFY_APP_ID" \
+              --region "$AWS_REGION" \
+              --custom-rules "$RULES" \
+              --query 'app.customRules' \
+              --output json
+            echo "::notice title=Amplify rules::SPA rewrite rules updated."
+          fi
+
       - name: Create Amplify deployment (get presigned upload URL)
         id: amplify_create
         run: |
