@@ -61,10 +61,20 @@ export function hasWorkerAsset(url: string): boolean {
 }
 
 /**
- * React hook that returns true once the asset's HEAD probe has resolved
- * with a 2xx. Re-renders the component when availability flips.
+ * React hook that returns true once the GLB at `url` has passed the HEAD
+ * probe (status 2xx AND content-type is NOT text/html). Re-renders the
+ * caller when availability flips. Works for any GLB, not just worker
+ * characters — the `Worker` in the export name is historical.
+ *
+ * IMPORTANT: when the URL hasn't been probed yet, this function kicks off
+ * the probe as a side effect so callers don't have to remember. This is
+ * what lets `<BuildingModel />` etc. pass in arbitrary GLB paths.
  */
-export function useWorkerAssetAvailable(url: string): boolean {
+export function useGlbAvailable(url: string): boolean {
+  // Trigger the probe on first observation — cheap and idempotent.
+  if (typeof window !== "undefined" && !assetStatus.has(url)) {
+    void probe(url);
+  }
   return useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -76,6 +86,9 @@ export function useWorkerAssetAvailable(url: string): boolean {
     () => false,
   );
 }
+
+/** Back-compat alias — older call sites still use this name. */
+export const useWorkerAssetAvailable = useGlbAvailable;
 
 export function cloneWorkerScene(source: THREE.Object3D): THREE.Object3D {
   return cloneSkeleton(source);

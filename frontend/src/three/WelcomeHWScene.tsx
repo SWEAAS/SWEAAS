@@ -24,6 +24,7 @@ import CameraStepper from "./CameraStepper";
 import GroundScenery from "./GroundScenery";
 import type { Agent } from "../store/agentStore";
 import { ROOMS, type DeskAssignment, type Stop } from "./tourStops";
+import { useGlbAvailable } from "./useWorkerModel";
 
 export const BUILDING_PATH = "/models/Building7EEVEE.glb";
 
@@ -189,7 +190,7 @@ function applyMaterials(scene: THREE.Object3D) {
   });
 }
 
-function BuildingModel() {
+function LoadedBuildingModel() {
   const gltf = useGLTF(BUILDING_PATH);
   useMemo(() => {
     const scene = gltf.scene;
@@ -202,6 +203,37 @@ function BuildingModel() {
     }
   }, [gltf]);
   return <primitive object={gltf.scene} />;
+}
+
+/**
+ * Gate the GLB load behind a content-type probe. Production (Amplify +
+ * CloudFront) returns the SPA index.html with `200 OK` for any path that
+ * isn't in the deploy bundle, and `useGLTF` will happily try to parse
+ * `<!doctype html>` as a glTF binary and then throw. The thrown error
+ * propagates out of Suspense, crashes the whole Canvas, and the user sees
+ * the "3D scene failed to load" fallback.
+ *
+ * With this guard, a missing building quietly falls back to rendering
+ * nothing for the building and the rest of the scene (workers, lights,
+ * outdoor scenery) still renders. Dev + correctly-deployed prod see the
+ * full GLB. A one-liner `console.warn` keeps the mis-deploy visible.
+ */
+let missingBuildingWarned = false;
+function BuildingModel() {
+  const available = useGlbAvailable(BUILDING_PATH);
+  if (!available) {
+    if (typeof window !== "undefined" && !missingBuildingWarned) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[HQ] Building GLB missing or served as HTML at ${BUILDING_PATH}. ` +
+          `Rendering scene without the building shell. Check that the Amplify ` +
+          `deploy zip contains frontend/dist/models/.`,
+      );
+      missingBuildingWarned = true;
+    }
+    return null;
+  }
+  return <LoadedBuildingModel />;
 }
 
 // ─── Room floor + ceiling lights (gives interior its own lighting) ─────────
@@ -352,4 +384,8 @@ export default function WelcomeHWScene({
   );
 }
 
-useGLTF.preload(BUILDING_PATH);
+// NOTE: do NOT `useGLTF.preload(BUILDING_PATH)` here. If the building GLB
+// is missing from the deploy bundle the preload starts fetching before our
+// HEAD probe has a chance to report `missing`, and drei caches an errored
+// loader promise that later resurfaces as a "3D scene failed to load"
+// crash. BuildingModel gates the load behind useGlbAvailable() instead.
