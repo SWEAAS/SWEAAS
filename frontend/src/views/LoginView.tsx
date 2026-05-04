@@ -3,18 +3,52 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 
+type Banner =
+  | { kind: "error"; message: string }
+  | { kind: "success"; message: string }
+  | { kind: "info"; message: string }
+  | null;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD = 6;
+
+function Alert({ banner }: { banner: Banner }) {
+  if (!banner) return null;
+  const styles =
+    banner.kind === "error"
+      ? "bg-red-50 border-red-200 text-red-800"
+      : banner.kind === "success"
+        ? "bg-green-50 border-green-200 text-green-800"
+        : "bg-blue-50 border-blue-200 text-blue-800";
+  const icon = banner.kind === "error" ? "⚠" : banner.kind === "success" ? "✓" : "ℹ";
+  return (
+    <div
+      role={banner.kind === "error" ? "alert" : "status"}
+      aria-live="polite"
+      className={`flex items-start gap-2 border rounded-lg px-3 py-2 text-sm mb-4 ${styles}`}
+    >
+      <span aria-hidden className="font-semibold">
+        {icon}
+      </span>
+      <span className="flex-1 whitespace-pre-line">{banner.message}</span>
+    </div>
+  );
+}
+
 export default function LoginView() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [banner, setBanner] = useState<Banner>(null);
   const [pending, setPending] = useState(false);
-  const [signupNote, setSignupNote] = useState<string | null>(null);
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const login = useAuthStore((s) => s.login);
   const signUp = useAuthStore((s) => s.signUp);
   const signInWithOAuth = useAuthStore((s) => s.signInWithOAuth);
+  const resendConfirmation = useAuthStore((s) => s.resendConfirmation);
   const initialized = useAuthStore((s) => s.initialized);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const navigate = useNavigate();
@@ -22,7 +56,7 @@ export default function LoginView() {
 
   useEffect(() => {
     const q = searchParams.get("error");
-    if (q) setLocalError(decodeURIComponent(q));
+    if (q) setBanner({ kind: "error", message: decodeURIComponent(q) });
   }, [searchParams]);
 
   useEffect(() => {
@@ -31,44 +65,99 @@ export default function LoginView() {
     }
   }, [initialized, isAuthenticated, navigate]);
 
+  const validate = (): string | null => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return "Please enter your email.";
+    if (!EMAIL_RE.test(trimmedEmail)) return "That doesn't look like a valid email address.";
+    if (!password) return "Please enter your password.";
+    if (isSignUp) {
+      if (password.length < MIN_PASSWORD)
+        return `Password must be at least ${MIN_PASSWORD} characters.`;
+      if (!fullName.trim()) return "Please enter your full name.";
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLocalError(null);
-    setSignupNote(null);
+    setBanner(null);
+    setPendingConfirmEmail(null);
+
+    const validationError = validate();
+    if (validationError) {
+      setBanner({ kind: "error", message: validationError });
+      return;
+    }
+
     setPending(true);
     try {
       if (isSignUp) {
-        const out = await signUp(email, password, fullName.trim() || undefined);
+        const out = await signUp(email.trim(), password, fullName.trim() || undefined);
+        if (out.alreadyRegistered) {
+          setBanner({
+            kind: "error",
+            message: out.error ?? "An account with this email already exists.",
+          });
+          return;
+        }
         if (out.error) {
-          setLocalError(out.error);
+          setBanner({ kind: "error", message: out.error });
           return;
         }
         if (out.needsConfirmation) {
-          setSignupNote("Check your email to confirm your account, then sign in.");
+          setPendingConfirmEmail(email.trim());
+          setBanner({
+            kind: "success",
+            message: `We sent a confirmation link to ${email.trim()}.\nClick the link in your inbox to verify your account, then sign in.`,
+          });
           return;
         }
+        setBanner({ kind: "success", message: "Account created. Redirecting…" });
       } else {
-        const out = await login(email, password);
+        const out = await login(email.trim(), password);
         if (out.error) {
-          setLocalError(out.error);
+          setBanner({ kind: "error", message: out.error });
           return;
         }
       }
       navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setBanner({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Unexpected error. Please try again.",
+      });
     } finally {
       setPending(false);
     }
   };
 
   const oauth = async (provider: "google" | "github") => {
-    setLocalError(null);
-    setSignupNote(null);
+    setBanner(null);
+    setPendingConfirmEmail(null);
     setPending(true);
     try {
       const out = await signInWithOAuth(provider);
-      if (out.error) setLocalError(out.error);
+      if (out.error) setBanner({ kind: "error", message: out.error });
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingConfirmEmail) return;
+    setResending(true);
+    try {
+      const out = await resendConfirmation(pendingConfirmEmail);
+      if (out.error) {
+        setBanner({ kind: "error", message: out.error });
+      } else {
+        setBanner({
+          kind: "success",
+          message: `Confirmation email re-sent to ${pendingConfirmEmail}.`,
+        });
+      }
+    } finally {
+      setResending(false);
     }
   };
 
@@ -95,13 +184,23 @@ export default function LoginView() {
             {isSignUp ? "Create Account" : "Welcome Back"}
           </h2>
 
+          {!isSupabaseConfigured() && (
+            <Alert
+              banner={{
+                kind: "info",
+                message:
+                  "Supabase env vars are not set — using local dev sign-in. OAuth and email signup are disabled.",
+              }}
+            />
+          )}
+
           {isSupabaseConfigured() && (
             <div className="flex flex-col gap-3 mb-6">
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => void oauth("google")}
-                className="w-full py-3 rounded-lg font-medium border border-sweaas-border bg-white hover:bg-sweaas-bg transition-colors text-sweaas-text"
+                className="w-full py-3 rounded-lg font-medium border border-sweaas-border bg-white hover:bg-sweaas-bg transition-colors text-sweaas-text disabled:opacity-60"
               >
                 Continue with Google
               </button>
@@ -109,7 +208,7 @@ export default function LoginView() {
                 type="button"
                 disabled={pending}
                 onClick={() => void oauth("github")}
-                className="w-full py-3 rounded-lg font-medium border border-sweaas-border bg-[#24292f] text-white hover:opacity-90 transition-opacity"
+                className="w-full py-3 rounded-lg font-medium border border-sweaas-border bg-[#24292f] text-white hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 Continue with GitHub
               </button>
@@ -124,54 +223,76 @@ export default function LoginView() {
             </div>
           )}
 
-          {localError && (
-            <p className="text-sm text-red-600 mb-4" role="alert">
-              {localError}
-            </p>
-          )}
-          {signupNote && (
-            <p className="text-sm text-sweaas-text-secondary mb-4">{signupNote}</p>
+          <Alert banner={banner} />
+
+          {pendingConfirmEmail && (
+            <div className="mb-4 -mt-2 text-sm">
+              <button
+                type="button"
+                onClick={() => void handleResend()}
+                disabled={resending}
+                className="text-sweaas-blue font-medium hover:underline disabled:opacity-60"
+              >
+                {resending ? "Resending…" : "Resend confirmation email"}
+              </button>
+            </div>
           )}
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4" noValidate>
             {isSignUp && (
               <div>
-                <label className="block text-sm font-medium mb-2">Full name</label>
+                <label className="block text-sm font-medium mb-2" htmlFor="auth-name">
+                  Full name
+                </label>
                 <input
+                  id="auth-name"
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Ada Lovelace"
                   className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
                   autoComplete="name"
+                  disabled={pending}
                 />
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium mb-2">Email</label>
+              <label className="block text-sm font-medium mb-2" htmlFor="auth-email">
+                Email
+              </label>
               <input
+                id="auth-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-                required
                 autoComplete="email"
+                disabled={pending}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Password</label>
+              <label className="block text-sm font-medium mb-2" htmlFor="auth-password">
+                Password
+              </label>
               <input
+                id="auth-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder={
+                  isSignUp ? `At least ${MIN_PASSWORD} characters` : "Enter your password"
+                }
                 className="w-full px-4 py-3 border border-sweaas-border rounded-lg focus:outline-none focus:border-sweaas-blue"
-                required
-                minLength={6}
                 autoComplete={isSignUp ? "new-password" : "current-password"}
+                disabled={pending}
               />
+              {isSignUp && (
+                <p className="text-xs text-sweaas-text-secondary mt-1">
+                  Use {MIN_PASSWORD} or more characters.
+                </p>
+              )}
             </div>
 
             <button
@@ -187,22 +308,17 @@ export default function LoginView() {
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
               type="button"
+              disabled={pending}
               onClick={() => {
                 setIsSignUp(!isSignUp);
-                setLocalError(null);
-                setSignupNote(null);
+                setBanner(null);
+                setPendingConfirmEmail(null);
               }}
-              className="text-sweaas-blue font-medium hover:underline"
+              className="text-sweaas-blue font-medium hover:underline disabled:opacity-60"
             >
               {isSignUp ? "Sign In" : "Sign Up"}
             </button>
           </p>
-
-          {!isSupabaseConfigured() && (
-            <p className="text-center text-xs text-sweaas-text-secondary mt-4">
-              Supabase env vars are not set — using local dev sign-in (no OAuth).
-            </p>
-          )}
         </div>
       </div>
     </div>

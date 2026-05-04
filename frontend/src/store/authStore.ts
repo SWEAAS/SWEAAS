@@ -21,8 +21,9 @@ interface AuthState {
     email: string,
     password: string,
     fullName?: string,
-  ) => Promise<{ error?: string; needsConfirmation?: boolean }>;
+  ) => Promise<{ error?: string; needsConfirmation?: boolean; alreadyRegistered?: boolean }>;
   signInWithOAuth: (provider: "google" | "github") => Promise<{ error?: string }>;
+  resendConfirmation: (email: string) => Promise<{ error?: string; sent?: boolean }>;
   logout: () => void;
   setUser: (user: User, token: string) => void;
   fetchProfile: () => Promise<void>;
@@ -108,9 +109,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data, error } = await getSupabase().auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName ?? "" } },
+      options: {
+        data: { full_name: fullName ?? "" },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
     if (error) return { error: error.message };
+    // Supabase security feature: if a user already exists, signUp returns a
+    // synthetic user with an empty identities array and no session/error.
+    // Detect that and surface a real message instead of "check your email".
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return {
+        alreadyRegistered: true,
+        error: "An account with this email already exists. Try signing in instead.",
+      };
+    }
     if (data.session?.access_token) {
       localStorage.setItem("sweaas_token", data.session.access_token);
       set({ token: data.session.access_token, isAuthenticated: true });
@@ -118,6 +131,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return {};
     }
     return { needsConfirmation: true };
+  },
+
+  resendConfirmation: async (email) => {
+    if (!isSupabaseConfigured()) {
+      return { error: "Supabase is not configured." };
+    }
+    const { error } = await getSupabase().auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) return { error: error.message };
+    return { sent: true };
   },
 
   signInWithOAuth: async (provider) => {
